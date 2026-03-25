@@ -2,11 +2,11 @@ import { describe, test, expect, beforeEach } from 'bun:test';
 import { runAgent } from '../src/agents/agent-runner';
 import type { AgentInvocation } from '../src/types/agent';
 
-// These tests use GANAI_MOCK_AGENTS=1 mode
+// These tests use NYAI_MOCK_AGENTS=1 mode
 
 describe('agent-runner (mock mode)', () => {
   beforeEach(() => {
-    process.env.GANAI_MOCK_AGENTS = '1';
+    process.env.NYAI_MOCK_AGENTS = '1';
   });
 
   test('mock planner returns success', async () => {

@@ -13,10 +13,10 @@ interface RunAgentOptions {
  * Spawns `claude -p` as a child process.
  * - stderr is streamed line-by-line via onStderrLine callback (real-time logs)
  * - stdout is collected and JSON-parsed for the structured result
- * - Supports mock mode via GANAI_MOCK_AGENTS=1
+ * - Supports mock mode via NYAI_MOCK_AGENTS=1
  */
 export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
-  if (process.env.GANAI_MOCK_AGENTS === '1') {
+  if (process.env.NYAI_MOCK_AGENTS === '1') {
     return runMockAgent(opts);
   }
 

@@ -1,12 +1,12 @@
 import type { AgentInvocation } from '../types/agent';
-import type { GanAIConfig } from '../types/config';
+import type { NYAIConfig } from '../types/config';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
 const EVALUATOR_PROMPT_PATH = join(import.meta.dir, '..', 'prompts', 'evaluator.md');
 
 export function buildEvaluatorInvocation(
-  config: GanAIConfig,
+  config: NYAIConfig,
   sprintId: string,
   round: number
 ): AgentInvocation {
@@ -68,7 +68,7 @@ The JSON must have this structure:
 }
 
 function getDefaultEvaluatorPrompt(): string {
-  return `You are the Evaluator agent in GanAI — an autonomous AI development orchestrator.
+  return `You are the Evaluator agent in NYAI — an autonomous AI development orchestrator.
 
 Your role is a **Senior QA Engineer**. Given a Feature Spec and implementation, you:
 

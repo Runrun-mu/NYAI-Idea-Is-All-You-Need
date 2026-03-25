@@ -1,11 +1,11 @@
 {
-  "name": "ganai",
+  "name": "nyai",
   "version": "0.1.0",
-  "description": "GanAI — Autonomous AI Agent Orchestrator with immersive TUI",
+  "description": "NYAI — Idea Is All You Need — Autonomous AI Agent Orchestrator with immersive TUI",
   "type": "module",
   "main": "src/index.ts",
   "bin": {
-    "ganai": "src/index.ts"
+    "nyai": "src/index.ts"
   },
   "scripts": {
     "start": "bun run src/index.ts",

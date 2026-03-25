@@ -1,6 +1,6 @@
-# GanAI Example: Agent Admin Dashboard
+# NYAI Example: Agent Admin Dashboard
 
-本文档记录使用 GanAI 构建 AI Agent 后台管理系统的完整步骤。
+本文档记录使用 NYAI 构建 AI Agent 后台管理系统的完整步骤。
 
 ---
 
@@ -22,12 +22,12 @@
 ```bash
 mkdir example-agent-admin
 cd example-agent-admin
-ganai init agent-admin
+nyai init agent-admin
 ```
 
 输出：
 ```
-✅ Initialized GanAI project "agent-admin" in example-agent-admin/.harness
+✅ Initialized NYAI project "agent-admin" in example-agent-admin/.harness
    Edit .harness/config.yaml to customize settings.
 ```
 
@@ -50,13 +50,13 @@ budget:
   maxDurationMinutes: 60
 ```
 
-### Step 3: 运行 GanAI
+### Step 3: 运行 NYAI
 
 ```bash
-ganai run --headless --budget 8 --max-rounds 3 "构建一个 AI Agent 后台管理系统（Agent Admin Dashboard）..."
+nyai run --headless --budget 8 --max-rounds 3 "构建一个 AI Agent 后台管理系统（Agent Admin Dashboard）..."
 ```
 
-### Step 4: GanAI 自动编排三个 Agent
+### Step 4: NYAI 自动编排三个 Agent
 
 #### Phase 1: Planner Agent（📋 产品经理）— 2.5 分钟
 
@@ -115,10 +115,10 @@ Evaluator 逐一检查 35 条 AC：
 
 ```bash
 # 查看状态
-ganai status
+nyai status
 
 # 查看评估报告
-ganai report
+nyai report
 ```
 
 ### Step 6: 打开项目

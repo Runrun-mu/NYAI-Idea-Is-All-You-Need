@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { Box, Text, useApp, useInput } from 'ink';
 import type { Orchestrator } from '../core/orchestrator';
-import type { GanAIConfig } from '../types/config';
+import type { NYAIConfig } from '../types/config';
 import { useOrchestrator } from './hooks/useOrchestrator';
 import { useKeyboard } from './hooks/useKeyboard';
 import { useTimer } from './hooks/useTimer';
@@ -19,7 +19,7 @@ type OverlayView = 'none' | 'report' | 'spec';
 
 interface AppProps {
   orchestrator: Orchestrator;
-  config: GanAIConfig;
+  config: NYAIConfig;
   prompt: string;
 }
 

@@ -1,4 +1,4 @@
-export interface GanAIConfig {
+export interface NYAIConfig {
   project: {
     name: string;
     description?: string;
@@ -36,7 +36,7 @@ export interface NotificationConfig {
   events?: string[];
 }
 
-export function defaultConfig(name: string, rootDir: string): GanAIConfig {
+export function defaultConfig(name: string, rootDir: string): NYAIConfig {
   return {
     project: { name, rootDir },
     budget: {

@@ -1,6 +1,6 @@
-# GanAI Example: MBTI Personality Quiz
+# NYAI Example: MBTI Personality Quiz
 
-This document records the steps used to build an MBTI personality quiz using GanAI.
+This document records the steps used to build an MBTI personality quiz using NYAI.
 
 ## Prerequisites
 
@@ -12,7 +12,7 @@ This document records the steps used to build an MBTI personality quiz using Gan
 ```bash
 mkdir example-mbti
 cd example-mbti
-ganai init mbti-quiz
+nyai init mbti-quiz
 ```
 
 This creates `.harness/` directory with:
@@ -32,16 +32,16 @@ budget:
   maxDurationMinutes: 60
 ```
 
-## Step 3: Run GanAI
+## Step 3: Run NYAI
 
 ### TUI Mode (interactive):
 ```bash
-ganai run "构建一个MBTI性格测试问卷系统..."
+nyai run "构建一个MBTI性格测试问卷系统..."
 ```
 
 ### Headless Mode (CI/scripts):
 ```bash
-ganai run --headless "构建一个MBTI性格测试问卷系统。要求：
+nyai run --headless "构建一个MBTI性格测试问卷系统。要求：
 1) 使用纯HTML+CSS+JavaScript实现（单个index.html文件即可），无需后端服务器。
 2) 包含至少20道MBTI测试题目，涵盖E/I、S/N、T/F、J/P四个维度。
 3) 每道题提供两个选项，用户点击选择后自动进入下一题。
@@ -53,7 +53,7 @@ ganai run --headless "构建一个MBTI性格测试问卷系统。要求：
 
 ## What happens during execution
 
-GanAI orchestrates three AI agents in sequence:
+NYAI orchestrates three AI agents in sequence:
 
 ### Phase 1: Planning (Planner Agent)
 - Reads the user requirement
@@ -80,13 +80,13 @@ If the verdict is FAIL or PARTIAL, the loop repeats (Generator → Evaluator) wi
 
 ```bash
 # View orchestrator status
-ganai status
+nyai status
 
 # View latest evaluation report
-ganai report
+nyai report
 
 # View autonomous decisions
-ganai decisions
+nyai decisions
 ```
 
 ## Step 5: Open the result

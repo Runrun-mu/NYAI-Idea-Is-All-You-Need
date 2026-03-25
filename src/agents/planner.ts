@@ -1,12 +1,12 @@
 import type { AgentInvocation } from '../types/agent';
-import type { GanAIConfig } from '../types/config';
+import type { NYAIConfig } from '../types/config';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
 const PLANNER_PROMPT_PATH = join(import.meta.dir, '..', 'prompts', 'planner.md');
 
 export function buildPlannerInvocation(
-  config: GanAIConfig,
+  config: NYAIConfig,
   userPrompt: string,
   sprintId: string
 ): AgentInvocation {
@@ -50,7 +50,7 @@ Project root: ${config.project.rootDir}
 }
 
 function getDefaultPlannerPrompt(): string {
-  return `You are the Planner agent in GanAI — an autonomous AI development orchestrator.
+  return `You are the Planner agent in NYAI — an autonomous AI development orchestrator.
 
 Your role is a **Senior Product Manager / Tech Lead**. Given a user requirement, you:
 

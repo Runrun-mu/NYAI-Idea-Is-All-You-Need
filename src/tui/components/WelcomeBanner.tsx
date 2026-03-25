@@ -15,7 +15,7 @@ export function WelcomeBanner({ prompt, projectName, budget, maxRounds }: Welcom
         ╔═══════════════════════════════════════╗
       </Text>
       <Text bold color="cyan">
-        ║          🤖 GanAI Orchestrator        ║
+        ║          🤖 NYAI Orchestrator        ║
       </Text>
       <Text bold color="cyan">
         ╚═══════════════════════════════════════╝

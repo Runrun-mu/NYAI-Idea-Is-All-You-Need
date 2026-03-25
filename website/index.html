@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="GanAI — Autonomous AI Agent orchestration engine. Idea Is All You Need.">
+  <meta name="theme-color" content="#0a0a0a">
+  <title>GanAI — Idea Is All You Need</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0a0a0a;
+      --bg-secondary: #111111;
+      --bg-card: rgba(255,255,255,0.03);
+      --border-card: rgba(255,255,255,0.08);
+      --gradient-start: #667eea;
+      --gradient-end: #764ba2;
+      --text-primary: #ffffff;
+      --text-secondary: rgba(255,255,255,0.6);
+      --text-muted: rgba(255,255,255,0.4);
+      --font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --container-max: 1200px;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+    }
+
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: var(--font-family);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    .container {
+      max-width: var(--container-max);
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* ====== ANIMATIONS ====== */
+    .animate-on-scroll {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+    .animate-on-scroll.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ====== NAVIGATION ====== */
+    nav {
+      position: fixed;
+      top: 0;
+      width: 100%;
+      z-index: 1000;
+      background: transparent;
+      transition: background 0.3s ease, border-bottom 0.3s ease, backdrop-filter 0.3s ease;
+      border-bottom: 1px solid transparent;
+    }
+    nav.nav-scrolled {
+      background: rgba(10,10,10,0.8);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .nav-inner {
+      max-width: var(--container-max);
+      margin: 0 auto;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 64px;
+    }
+    .nav-logo {
+      font-size: 1.5rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      text-decoration: none;
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 32px;
+      list-style: none;
+    }
+    .nav-links a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 0.95rem;
+      font-weight: 500;
+      transition: color 0.2s ease;
+    }
+    .nav-links a:hover {
+      color: var(--text-primary);
+    }
+    .btn-cta {
+      display: inline-block;
+      padding: 10px 24px;
+      background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 0.95rem;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+    .btn-cta:hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
+    }
+
+    /* Hamburger */
+    .hamburger {
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      width: 40px;
+      height: 40px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      gap: 5px;
+      padding: 0;
+    }
+    .hamburger span {
+      display: block;
+      width: 24px;
+      height: 2px;
+      background: var(--text-primary);
+      border-radius: 2px;
+      transition: transform 0.3s ease, opacity 0.3s ease;
+    }
+    .hamburger.active span:nth-child(1) {
+      transform: translateY(7px) rotate(45deg);
+    }
+    .hamburger.active span:nth-child(2) {
+      opacity: 0;
+    }
+    .hamburger.active span:nth-child(3) {
+      transform: translateY(-7px) rotate(-45deg);
+    }
+
+    .mobile-menu {
+      display: none;
+      position: fixed;
+      top: 64px;
+      left: 0;
+      width: 100%;
+      background: rgba(10,10,10,0.95);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      padding: 24px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .mobile-menu.open {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .mobile-menu a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 1.1rem;
+      font-weight: 500;
+    }
+    .mobile-menu a:hover {
+      color: var(--text-primary);
+    }
+
+    /* ====== HERO ====== */
+    .hero {
+      padding: 160px 0 80px;
+      text-align: center;
+    }
+    .hero-headline {
+      font-size: clamp(2.5rem, 6vw, 4.5rem);
+      font-weight: 800;
+      line-height: 1.1;
+      margin-bottom: 24px;
+      background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero-subtitle {
+      font-size: clamp(1rem, 2.5vw, 1.25rem);
+      color: var(--text-secondary);
+      max-width: 600px;
+      margin: 0 auto 40px;
+      font-weight: 400;
+    }
+    .hero-buttons {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 60px;
+    }
+    .btn-ghost {
+      display: inline-block;
+      padding: 10px 24px;
+      background: transparent;
+      color: var(--text-primary);
+      border: 1px solid var(--border-card);
+      border-radius: var(--radius-sm);
+      font-size: 0.95rem;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+      transition: border-color 0.2s ease, background 0.2s ease;
+    }
+    .btn-ghost:hover {
+      border-color: rgba(255,255,255,0.2);
+      background: rgba(255,255,255,0.05);
+    }
+
+    /* Terminal */
+    .terminal {
+      max-width: 700px;
+      margin: 0 auto;
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      border: 1px solid var(--border-card);
+      text-align: left;
+    }
+    .terminal-titlebar {
+      background: #1e1e3a;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      padding: 0 14px;
+      gap: 8px;
+    }
+    .terminal-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+    .terminal-dot.red { background: #ff5f57; }
+    .terminal-dot.yellow { background: #febc2e; }
+    .terminal-dot.green { background: #28c840; }
+    .terminal-body {
+      background: #1a1a2e;
+      padding: 20px;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 0.9rem;
+      line-height: 1.7;
+      min-height: 220px;
+      color: var(--text-primary);
+    }
+    .terminal-line {
+      opacity: 0;
+      transform: translateY(4px);
+      animation: termFadeIn 0.3s forwards;
+    }
+    @keyframes termFadeIn {
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ====== STATS BAR ====== */
+    .stats {
+      padding: 60px 0;
+      border-top: 1px solid var(--border-card);
+      border-bottom: 1px solid var(--border-card);
+    }
+    .stats-grid {
+      display: flex;
+      justify-content: space-around;
+      flex-wrap: wrap;
+      gap: 24px;
+    }
+    .stat-item {
+      text-align: center;
+      flex: 1;
+      min-width: 120px;
+    }
+    .stat-number {
+      font-size: clamp(2rem, 4vw, 3rem);
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .stat-label {
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+      margin-top: 4px;
+    }
+
+    /* ====== SECTION COMMON ====== */
+    .section {
+      padding: 100px 0;
+    }
+    .section-title {
+      text-align: center;
+      font-size: clamp(1.8rem, 4vw, 2.5rem);
+      font-weight: 700;
+      margin-bottom: 60px;
+    }
+
+    /* ====== FEATURES ====== */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: var(--radius-lg);
+      padding: 2rem;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .feature-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 0 30px rgba(102,126,234,0.15);
+    }
+    .feature-icon {
+      font-size: 2.5rem;
+      margin-bottom: 16px;
+      display: inline-block;
+      background: rgba(255,255,255,0.05);
+      width: 64px;
+      height: 64px;
+      line-height: 64px;
+      text-align: center;
+      border-radius: var(--radius-md);
+    }
+    .feature-card h3 {
+      font-size: 1.15rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .feature-card p {
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+
+    /* ====== HOW IT WORKS ====== */
+    .steps-container {
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      gap: 24px;
+      position: relative;
+    }
+    .step {
+      flex: 1;
+      max-width: 320px;
+      text-align: center;
+      position: relative;
+      padding: 0 16px;
+    }
+    .step-number {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+      color: #fff;
+      font-size: 1.5rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+    }
+    .step-icon {
+      font-size: 2rem;
+      margin-bottom: 12px;
+    }
+    .step h3 {
+      font-size: 1.2rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .step p {
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+    }
+    /* Connecting lines desktop */
+    .step:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      top: 32px;
+      right: -12px;
+      width: 24px;
+      height: 2px;
+      background: linear-gradient(90deg, var(--gradient-start), var(--gradient-end));
+    }
+    .retry-note {
+      text-align: center;
+      margin-top: 48px;
+      color: var(--text-secondary);
+      font-size: 1rem;
+    }
+    .retry-note span {
+      display: inline-block;
+      padding: 12px 24px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: var(--radius-sm);
+    }
+
+    /* ====== ARCHITECTURE ====== */
+    .architecture-layout {
+      display: flex;
+      gap: 60px;
+      align-items: center;
+    }
+    .arch-diagram {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+      min-height: 360px;
+      justify-content: center;
+    }
+    .arch-center {
+      width: 160px;
+      height: 160px;
+      border-radius: 50%;
+      background: var(--bg-secondary);
+      border: 2px solid transparent;
+      background-image: linear-gradient(var(--bg-secondary), var(--bg-secondary)), linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+      background-origin: border-box;
+      background-clip: padding-box, border-box;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 1rem;
+      position: relative;
+      z-index: 2;
+    }
+    .arch-nodes {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+    }
+    .arch-node {
+      position: absolute;
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      font-weight: 600;
+      z-index: 2;
+      text-align: center;
+    }
+    .arch-node .arch-emoji {
+      font-size: 1.5rem;
+      margin-bottom: 4px;
+    }
+    .arch-node-planner {
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+    .arch-node-generator {
+      bottom: 0;
+      left: 10%;
+    }
+    .arch-node-evaluator {
+      bottom: 0;
+      right: 10%;
+    }
+    .arch-lines {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+    .arch-lines svg {
+      width: 100%;
+      height: 100%;
+    }
+    .arch-lines line {
+      stroke: url(#archGrad);
+      stroke-width: 2;
+      stroke-dasharray: 6 4;
+    }
+
+    .arch-events {
+      flex: 1;
+    }
+    .arch-events h3 {
+      font-size: 1.2rem;
+      font-weight: 600;
+      margin-bottom: 20px;
+    }
+    .event-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .event-badge {
+      display: inline-block;
+      padding: 8px 16px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: var(--radius-sm);
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 0.9rem;
+      color: var(--gradient-start);
+    }
+
+    /* ====== EXAMPLES ====== */
+    .examples-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 32px;
+    }
+    .example-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .example-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 0 30px rgba(102,126,234,0.15);
+    }
+    .example-preview {
+      height: 200px;
+      background: linear-gradient(135deg, rgba(102,126,234,0.1), rgba(118,75,162,0.1));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 3rem;
+      border-bottom: 1px solid var(--border-card);
+    }
+    .example-content {
+      padding: 24px;
+    }
+    .example-content h3 {
+      font-size: 1.2rem;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    .example-stats {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .example-stats span {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+    }
+    .example-stats strong {
+      color: var(--gradient-start);
+    }
+    .example-content a {
+      color: var(--gradient-start);
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 0.95rem;
+      transition: opacity 0.2s;
+    }
+    .example-content a:hover {
+      opacity: 0.8;
+    }
+
+    /* ====== QUICK START ====== */
+    .quickstart-layout {
+      display: flex;
+      gap: 48px;
+      align-items: flex-start;
+    }
+    .quickstart-code {
+      flex: 3;
+      position: relative;
+    }
+    .quickstart-text {
+      flex: 2;
+    }
+    .quickstart-text h3 {
+      font-size: 1.3rem;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+    .quickstart-text p {
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+      margin-bottom: 12px;
+      line-height: 1.6;
+    }
+    .quickstart-text ol {
+      color: var(--text-secondary);
+      padding-left: 20px;
+      font-size: 0.95rem;
+      line-height: 2;
+    }
+    .code-block {
+      background: #1a1a2e;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-card);
+      overflow: hidden;
+      position: relative;
+    }
+    .code-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      background: rgba(255,255,255,0.02);
+      border-bottom: 1px solid var(--border-card);
+    }
+    .code-header span {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+    .copy-btn {
+      padding: 4px 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: var(--radius-sm);
+      color: var(--text-secondary);
+      font-size: 0.8rem;
+      cursor: pointer;
+      font-family: var(--font-family);
+      transition: color 0.2s;
+    }
+    .copy-btn:hover {
+      color: var(--text-primary);
+    }
+    .code-body {
+      padding: 20px;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 0.9rem;
+      line-height: 1.8;
+      overflow-x: auto;
+    }
+    .code-comment { color: rgba(255,255,255,0.35); }
+    .code-string { color: #a6e3a1; }
+    .code-command { color: #f0f0f0; }
+
+    /* ====== FOOTER ====== */
+    footer {
+      padding: 40px 0;
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+    .footer-inner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 24px;
+    }
+    .footer-left {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .footer-logo {
+      font-size: 1.2rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .footer-left p {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+    .footer-center {
+      display: flex;
+      gap: 24px;
+    }
+    .footer-center a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 0.9rem;
+      transition: color 0.2s;
+    }
+    .footer-center a:hover {
+      color: var(--text-primary);
+    }
+    .footer-right {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+    .footer-right span {
+      padding: 4px 12px;
+      border: 1px solid var(--border-card);
+      border-radius: var(--radius-sm);
+    }
+
+    /* ====== RESPONSIVE — Tablet ====== */
+    @media (max-width: 1024px) {
+      .features-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .architecture-layout {
+        flex-direction: column;
+      }
+      .arch-diagram {
+        width: 100%;
+        max-width: 400px;
+      }
+      .quickstart-layout {
+        flex-direction: column;
+      }
+    }
+
+    /* ====== RESPONSIVE — Mobile ====== */
+    @media (max-width: 768px) {
+      .nav-links {
+        display: none;
+      }
+      .hamburger {
+        display: flex;
+      }
+      .hero {
+        padding: 120px 0 60px;
+      }
+      .features-grid {
+        grid-template-columns: 1fr;
+      }
+      .steps-container {
+        flex-direction: column;
+        align-items: center;
+      }
+      .step {
+        max-width: 100%;
+      }
+      .step:not(:last-child)::after {
+        top: auto;
+        bottom: -14px;
+        right: auto;
+        left: 50%;
+        transform: translateX(-50%) rotate(90deg);
+        width: 24px;
+      }
+      .examples-grid {
+        grid-template-columns: 1fr;
+      }
+      .footer-inner {
+        flex-direction: column;
+        text-align: center;
+      }
+      .footer-center {
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ====== NAVIGATION ====== -->
+  <header>
+    <nav id="navbar" aria-label="Main navigation">
+      <div class="nav-inner">
+        <a href="#" class="nav-logo" aria-label="GanAI Home">GanAI</a>
+        <ul class="nav-links">
+          <li><a href="#features">Features</a></li>
+          <li><a href="#how-it-works">How it Works</a></li>
+          <li><a href="#examples">Examples</a></li>
+          <li><a href="https://github.com/Runrun-mu/NYAI-Idea-Is-All-You-Need" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+          <li><a href="#quickstart" class="btn-cta">Get Started</a></li>
+        </ul>
+        <button class="hamburger" id="hamburgerBtn" aria-label="Toggle navigation menu" aria-expanded="false">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+      </div>
+      <div class="mobile-menu" id="mobileMenu" role="navigation" aria-label="Mobile navigation">
+        <a href="#features">Features</a>
+        <a href="#how-it-works">How it Works</a>
+        <a href="#examples">Examples</a>
+        <a href="https://github.com/Runrun-mu/NYAI-Idea-Is-All-You-Need" target="_blank" rel="noopener noreferrer">GitHub</a>
+        <a href="#quickstart" class="btn-cta" style="text-align:center;">Get Started</a>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <!-- ====== HERO ====== -->
+    <section class="hero">
+      <div class="container">
+        <h1 class="hero-headline">Idea Is All You Need</h1>
+        <p class="hero-subtitle">三个 AI Agent 自主协作，把你的一句话需求变成可运行的代码</p>
+        <div class="hero-buttons">
+          <a href="#quickstart" class="btn-cta">Get Started</a>
+          <a href="https://github.com/Runrun-mu/NYAI-Idea-Is-All-You-Need" target="_blank" rel="noopener noreferrer" class="btn-ghost">View on GitHub</a>
+        </div>
+        <div class="terminal" id="terminal">
+          <div class="terminal-titlebar">
+            <div class="terminal-dot red"></div>
+            <div class="terminal-dot yellow"></div>
+            <div class="terminal-dot green"></div>
+          </div>
+          <div class="terminal-body" id="terminalBody"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====== STATS BAR ====== -->
+    <section class="stats animate-on-scroll" id="statsSection">
+      <div class="container">
+        <div class="stats-grid">
+          <div class="stat-item">
+            <div class="stat-number" data-target="3">0</div>
+            <div class="stat-label">Agents</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-number" data-target="32">0</div>
+            <div class="stat-label">Tests</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-number" data-target="2">0</div>
+            <div class="stat-label">Examples</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-number" data-target="1">0</div>
+            <div class="stat-label">Prompt → Working Code</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====== FEATURES ====== -->
+    <section class="section animate-on-scroll" id="features">
+      <div class="container">
+        <h2 class="section-title">Why GanAI?</h2>
+        <div class="features-grid">
+          <div class="feature-card">
+            <div class="feature-icon">🤖</div>
+            <h3>三Agent协作</h3>
+            <p>Planner, Generator, Evaluator 自动编排</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">🔄</div>
+            <h3>自动修复循环</h3>
+            <p>评估不通过自动重试，直到 PASS</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">🖥️</div>
+            <h3>沉浸式 TUI</h3>
+            <p>实时查看 Agent 状态、日志流、成本</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">📊</div>
+            <h3>质量保证</h3>
+            <p>每个功能都有验收标准，逐条评估</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">💰</div>
+            <h3>成本控制</h3>
+            <p>可配置预算上限，超支自动停止</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">🧪</div>
+            <h3>Mock 模式</h3>
+            <p>开发测试零 API 成本</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====== HOW IT WORKS ====== -->
+    <section class="section animate-on-scroll" id="how-it-works">
+      <div class="container">
+        <h2 class="section-title">How it works</h2>
+        <div class="steps-container">
+          <div class="step">
+            <div class="step-number">1</div>
+            <div class="step-icon">📋</div>
+            <h3>Plan</h3>
+            <p>Planner 分析需求，生成 Feature Spec 和验收标准</p>
+          </div>
+          <div class="step">
+            <div class="step-number">2</div>
+            <div class="step-icon">⚡</div>
+            <h3>Generate</h3>
+            <p>Generator 读取 Spec，实现完整代码</p>
+          </div>
+          <div class="step">
+            <div class="step-number">3</div>
+            <div class="step-icon">🔍</div>
+            <h3>Evaluate</h3>
+            <p>Evaluator 逐条检查，输出评估报告</p>
+          </div>
+        </div>
+        <div class="retry-note">
+          <span>↻ 如果评估不通过 → 自动重试修复，直到通过</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====== ARCHITECTURE ====== -->
+    <section class="section animate-on-scroll" id="architecture">
+      <div class="container">
+        <h2 class="section-title">Architecture</h2>
+        <div class="architecture-layout">
+          <div class="arch-diagram">
+            <svg class="arch-lines" viewBox="0 0 400 360" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <defs>
+                <linearGradient id="archGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#667eea"/>
+                  <stop offset="100%" stop-color="#764ba2"/>
+                </linearGradient>
+              </defs>
+              <!-- Center to Planner -->
+              <line x1="200" y1="140" x2="200" y2="70" stroke="url(#archGrad)" stroke-width="2" stroke-dasharray="6 4"/>
+              <!-- Center to Generator -->
+              <line x1="160" y1="210" x2="90" y2="280" stroke="url(#archGrad)" stroke-width="2" stroke-dasharray="6 4"/>
+              <!-- Center to Evaluator -->
+              <line x1="240" y1="210" x2="310" y2="280" stroke="url(#archGrad)" stroke-width="2" stroke-dasharray="6 4"/>
+            </svg>
+            <div class="arch-nodes">
+              <div class="arch-node arch-node-planner">
+                <span class="arch-emoji">📋</span>
+                Planner
+              </div>
+              <div class="arch-node arch-node-generator">
+                <span class="arch-emoji">⚡</span>
+                Generator
+              </div>
+              <div class="arch-node arch-node-evaluator">
+                <span class="arch-emoji">🔍</span>
+                Evaluator
+              </div>
+            </div>
+            <div class="arch-center">Orchestrator</div>
+          </div>
+          <div class="arch-events">
+            <h3>Key Events</h3>
+            <div class="event-list">
+              <div><span class="event-badge">state:change</span></div>
+              <div><span class="event-badge">agent:log</span></div>
+              <div><span class="event-badge">eval:verdict</span></div>
+              <div><span class="event-badge">cost:update</span></div>
+              <div><span class="event-badge">round:complete</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====== EXAMPLES ====== -->
+    <section class="section animate-on-scroll" id="examples">
+      <div class="container">
+        <h2 class="section-title">Built with GanAI</h2>
+        <div class="examples-grid">
+          <div class="example-card">
+            <div class="example-preview">🧠</div>
+            <div class="example-content">
+              <h3>MBTI 性格测试</h3>
+              <div class="example-stats">
+                <span>Score: <strong>95</strong></span>
+                <span>Lines: <strong>619</strong></span>
+                <span>Rounds: <strong>1</strong></span>
+              </div>
+              <a href="https://github.com/Runrun-mu/NYAI-Idea-Is-All-You-Need" target="_blank" rel="noopener noreferrer">View Source →</a>
+            </div>
+          </div>
+          <div class="example-card">
+            <div class="example-preview">🖥️</div>
+            <div class="example-content">
+              <h3>Agent 管理后台</h3>
+              <div class="example-stats">
+                <span>Score: <strong>97</strong></span>
+                <span>Lines: <strong>2551</strong></span>
+                <span>Rounds: <strong>1</strong></span>
+              </div>
+              <a href="https://github.com/Runrun-mu/NYAI-Idea-Is-All-You-Need" target="_blank" rel="noopener noreferrer">View Source →</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====== QUICK START ====== -->
+    <section class="section animate-on-scroll" id="quickstart">
+      <div class="container">
+        <h2 class="section-title">Get started in 30 seconds</h2>
+        <div class="quickstart-layout">
+          <div class="quickstart-code">
+            <div class="code-block">
+              <div class="code-header">
+                <span>terminal</span>
+                <button class="copy-btn" id="copyBtn" aria-label="Copy code to clipboard">Copy</button>
+              </div>
+              <div class="code-body" id="codeContent">
+<span class="code-comment"># Install GanAI</span>
+<span class="code-command">pip install ganai</span>
+
+<span class="code-comment"># Set your API key</span>
+<span class="code-command">export ANTHROPIC_API_KEY=<span class="code-string">"sk-..."</span></span>
+
+<span class="code-comment"># Run with your idea</span>
+<span class="code-command">ganai run <span class="code-string">"创建一个 MBTI 性格测试"</span></span>
+              </div>
+            </div>
+          </div>
+          <div class="quickstart-text">
+            <h3>Three simple steps</h3>
+            <p>Get from idea to working code in under a minute. GanAI handles the rest.</p>
+            <ol>
+              <li>Install with pip</li>
+              <li>Set your Anthropic API key</li>
+              <li>Run with your idea in natural language</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ====== FOOTER ====== -->
+  <footer>
+    <div class="container">
+      <div class="footer-inner">
+        <div class="footer-left">
+          <div class="footer-logo">GanAI</div>
+          <p>Built with ❤️ by NYAI Team</p>
+        </div>
+        <div class="footer-center">
+          <a href="https://github.com/Runrun-mu/NYAI-Idea-Is-All-You-Need" target="_blank" rel="noopener noreferrer">GitHub</a>
+          <a href="https://github.com/Runrun-mu/NYAI-Idea-Is-All-You-Need#readme" target="_blank" rel="noopener noreferrer">Documentation</a>
+          <a href="#examples">Examples</a>
+        </div>
+        <div class="footer-right">
+          <span>MIT License</span>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    /* ====== NAV SCROLL EFFECT ====== */
+    (function() {
+      var navbar = document.getElementById('navbar');
+      window.addEventListener('scroll', function() {
+        if (window.scrollY > 50) {
+          navbar.classList.add('nav-scrolled');
+        } else {
+          navbar.classList.remove('nav-scrolled');
+        }
+      });
+    })();
+
+    /* ====== HAMBURGER MENU ====== */
+    (function() {
+      var btn = document.getElementById('hamburgerBtn');
+      var menu = document.getElementById('mobileMenu');
+      btn.addEventListener('click', function() {
+        var isOpen = menu.classList.toggle('open');
+        btn.classList.toggle('active');
+        btn.setAttribute('aria-expanded', isOpen);
+      });
+      // Close menu on link click
+      menu.querySelectorAll('a').forEach(function(link) {
+        link.addEventListener('click', function() {
+          menu.classList.remove('open');
+          btn.classList.remove('active');
+          btn.setAttribute('aria-expanded', 'false');
+        });
+      });
+    })();
+
+    /* ====== SCROLL-TRIGGERED FADE-IN ====== */
+    (function() {
+      var observer = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+          }
+        });
+      }, { threshold: 0.1 });
+
+      document.querySelectorAll('.animate-on-scroll').forEach(function(el) {
+        observer.observe(el);
+      });
+    })();
+
+    /* ====== TERMINAL TYPEWRITER ====== */
+    (function() {
+      var lines = [
+        '$ ganai run "创建一个 MBTI 性格测试"',
+        '🔄 State: IDLE → PLANNING',
+        '🚀 Planner agent started...',
+        '📋 Feature spec created (20 acceptance criteria)',
+        '⚡ Generator agent started...',
+        '💻 Writing code... 15 files generated',
+        '🔍 Evaluator agent started...',
+        '✅ Verdict: PASS (Score: 97/100)',
+        '🎉 Done! 1 round, 14 minutes'
+      ];
+      var terminalBody = document.getElementById('terminalBody');
+      var started = false;
+
+      function startTypewriter() {
+        if (started) return;
+        started = true;
+        lines.forEach(function(line, i) {
+          setTimeout(function() {
+            var div = document.createElement('div');
+            div.className = 'terminal-line';
+            div.textContent = line;
+            terminalBody.appendChild(div);
+          }, i * 500);
+        });
+      }
+
+      var termObserver = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+          if (entry.isIntersecting) {
+            startTypewriter();
+            termObserver.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.1 });
+
+      termObserver.observe(document.getElementById('terminal'));
+    })();
+
+    /* ====== STATS COUNT-UP ====== */
+    (function() {
+      var animated = false;
+      var statsObserver = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+          if (entry.isIntersecting && !animated) {
+            animated = true;
+            document.querySelectorAll('.stat-number').forEach(function(el) {
+              var target = parseInt(el.getAttribute('data-target'), 10);
+              var duration = 1500;
+              var start = performance.now();
+
+              function update(now) {
+                var elapsed = now - start;
+                var progress = Math.min(elapsed / duration, 1);
+                // Ease out
+                var eased = 1 - Math.pow(1 - progress, 3);
+                el.textContent = Math.round(eased * target);
+                if (progress < 1) {
+                  requestAnimationFrame(update);
+                } else {
+                  el.textContent = target;
+                }
+              }
+              requestAnimationFrame(update);
+            });
+            statsObserver.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.1 });
+
+      statsObserver.observe(document.getElementById('statsSection'));
+    })();
+
+    /* ====== COPY BUTTON ====== */
+    (function() {
+      var copyBtn = document.getElementById('copyBtn');
+      var codeContent = document.getElementById('codeContent');
+      copyBtn.addEventListener('click', function() {
+        var text = codeContent.textContent.trim();
+        navigator.clipboard.writeText(text).then(function() {
+          copyBtn.textContent = 'Copied!';
+          setTimeout(function() {
+            copyBtn.textContent = 'Copy';
+          }, 2000);
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

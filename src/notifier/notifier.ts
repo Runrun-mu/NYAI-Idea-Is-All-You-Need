@@ -4,6 +4,6 @@ export interface Notifier {
 
 export class TerminalNotifier implements Notifier {
   async notify(event: string, message: string): Promise<void> {
-    console.log(`[GanAI] ${event}: ${message}`);
+    console.log(`[NYAI] ${event}: ${message}`);
   }
 }

@@ -7,7 +7,7 @@ import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'fs';
 import { join, resolve } from 'path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
-import type { GanAIConfig } from './types/config';
+import type { NYAIConfig } from './types/config';
 import { defaultConfig } from './types/config';
 import { Orchestrator } from './core/orchestrator';
 import { App } from './tui/App';
@@ -19,17 +19,17 @@ import { getLatestReport } from './protocol/file-protocol';
 const program = new Command();
 
 program
-  .name('ganai')
-  .description('GanAI — Autonomous AI Agent Orchestrator')
+  .name('nyai')
+  .description('NYAI — Autonomous AI Agent Orchestrator')
   .version('0.1.0');
 
-// ─── ganai init ──────────────────────────────────────────────────
+// ─── nyai init ──────────────────────────────────────────────────
 
 program
   .command('init')
   .argument('[name]', 'Project name', 'my-project')
   .option('-d, --dir <dir>', 'Project root directory', '.')
-  .description('Initialize a GanAI project')
+  .description('Initialize a NYAI project')
   .action((name: string, opts: { dir: string }) => {
     const rootDir = resolve(opts.dir);
     const harnessDir = join(rootDir, '.harness');
@@ -59,11 +59,11 @@ program
       'utf-8'
     );
 
-    console.log(`✅ Initialized GanAI project "${name}" in ${harnessDir}`);
+    console.log(`✅ Initialized NYAI project "${name}" in ${harnessDir}`);
     console.log('   Edit .harness/config.yaml to customize settings.');
   });
 
-// ─── ganai run ───────────────────────────────────────────────────
+// ─── nyai run ───────────────────────────────────────────────────
 
 program
   .command('run')
@@ -72,7 +72,7 @@ program
   .option('-d, --dir <dir>', 'Project root directory', '.')
   .option('--budget <usd>', 'Max cost in USD', parseFloat)
   .option('--max-rounds <n>', 'Max generate/evaluate rounds', parseInt)
-  .description('Run GanAI to implement a requirement')
+  .description('Run NYAI to implement a requirement')
   .action(async (prompt: string, opts: { headless?: boolean; dir: string; budget?: number; maxRounds?: number }) => {
     const rootDir = resolve(opts.dir);
     const config = loadConfig(rootDir);
@@ -109,7 +109,7 @@ program
     }
   });
 
-// ─── ganai status ────────────────────────────────────────────────
+// ─── nyai status ────────────────────────────────────────────────
 
 program
   .command('status')
@@ -121,11 +121,11 @@ program
     const state = loadState(harnessDir);
 
     if (!state) {
-      console.log('No active state found. Run `ganai run` first.');
+      console.log('No active state found. Run `nyai run` first.');
       return;
     }
 
-    console.log('📊 GanAI Status');
+    console.log('📊 NYAI Status');
     console.log(`   State: ${state.state}`);
     console.log(`   Sprint: ${state.sprintId}`);
     console.log(`   Round: ${state.round}`);
@@ -136,7 +136,7 @@ program
     }
   });
 
-// ─── ganai decisions ─────────────────────────────────────────────
+// ─── nyai decisions ─────────────────────────────────────────────
 
 program
   .command('decisions')
@@ -164,7 +164,7 @@ program
     }
   });
 
-// ─── ganai report ────────────────────────────────────────────────
+// ─── nyai report ────────────────────────────────────────────────
 
 program
   .command('report')
@@ -211,11 +211,11 @@ program
 
 // ─── Config Loading ──────────────────────────────────────────────
 
-function loadConfig(rootDir: string): GanAIConfig {
+function loadConfig(rootDir: string): NYAIConfig {
   const configPath = join(rootDir, '.harness', 'config.yaml');
   try {
     const raw = readFileSync(configPath, 'utf-8');
-    const parsed = parseYaml(raw) as GanAIConfig;
+    const parsed = parseYaml(raw) as NYAIConfig;
     parsed.project.rootDir = rootDir;
     return parsed;
   } catch {

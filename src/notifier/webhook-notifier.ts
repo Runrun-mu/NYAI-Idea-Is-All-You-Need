@@ -17,7 +17,7 @@ export class WebhookNotifier implements Notifier {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          text: `[GanAI] ${event}: ${message}`,
+          text: `[NYAI] ${event}: ${message}`,
           event,
           message,
           metadata,
@@ -25,7 +25,7 @@ export class WebhookNotifier implements Notifier {
         }),
       });
     } catch (err) {
-      console.error(`[GanAI] Failed to send webhook: ${err}`);
+      console.error(`[NYAI] Failed to send webhook: ${err}`);
     }
   }
 }

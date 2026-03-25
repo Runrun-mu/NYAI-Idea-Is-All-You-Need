@@ -1,12 +1,12 @@
 import type { AgentInvocation } from '../types/agent';
-import type { GanAIConfig } from '../types/config';
+import type { NYAIConfig } from '../types/config';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
 const GENERATOR_PROMPT_PATH = join(import.meta.dir, '..', 'prompts', 'generator.md');
 
 export function buildGeneratorInvocation(
-  config: GanAIConfig,
+  config: NYAIConfig,
   sprintId: string,
   round: number,
   previousEvalFeedback?: string
@@ -60,7 +60,7 @@ Focus on fixing the FAILED acceptance criteria first.`;
 }
 
 function getDefaultGeneratorPrompt(): string {
-  return `You are the Generator agent in GanAI — an autonomous AI development orchestrator.
+  return `You are the Generator agent in NYAI — an autonomous AI development orchestrator.
 
 Your role is a **Senior Full-Stack Engineer**. Given a Feature Spec and Sprint Contract, you:
 

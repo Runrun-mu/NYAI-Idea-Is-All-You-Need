@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import type { GanAIConfig } from '../types/config';
+import type { NYAIConfig } from '../types/config';
 import type { State, OrchestratorState, PendingDecision } from '../types/state';
 import type { AgentRole } from '../types/agent';
 import type { EvalVerdict, EvalReport } from '../types/protocol';
@@ -20,14 +20,14 @@ import { saveState, loadState } from '../protocol/state-store';
 import { appendDecision } from '../protocol/decision-logger';
 
 export class Orchestrator extends EventEmitter {
-  private config: GanAIConfig;
+  private config: NYAIConfig;
   private state: OrchestratorState;
   private costTracker: CostTracker;
   private harnessDir: string;
   private abortController: AbortController;
   private pendingDecisionResolve: ((resolution: string) => void) | null = null;
 
-  constructor(config: GanAIConfig) {
+  constructor(config: NYAIConfig) {
     super();
     this.config = config;
     this.harnessDir = ensureHarnessDir(config.project.rootDir);
@@ -382,7 +382,7 @@ export class Orchestrator extends EventEmitter {
     // Avoid Node's special 'error' event behavior (throws if no listener)
     // We use our own 'error' type string which gets caught by '*' wildcard
     if (event.type === 'error') {
-      this.emit('ganai:error', event);
+      this.emit('nyai:error', event);
     } else {
       this.emit(event.type, event);
     }
