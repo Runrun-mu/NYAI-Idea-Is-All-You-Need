@@ -1,0 +1,62 @@
+export interface GanAIConfig {
+  project: {
+    name: string;
+    description?: string;
+    rootDir: string;
+  };
+  budget: {
+    maxCostUsd: number;
+    maxRounds: number;
+    maxDurationMinutes: number;
+  };
+  agents: {
+    planner: AgentConfig;
+    generator: AgentConfig;
+    evaluator: AgentConfig;
+  };
+  notification?: NotificationConfig;
+  autonomy: {
+    autoApproveDecisions: boolean;
+    autoApproveTimeoutMs: number;
+  };
+}
+
+export interface AgentConfig {
+  model?: string;
+  maxTurns?: number;
+  systemPromptPath?: string;
+  allowedTools?: string[];
+  disallowedTools?: string[];
+  additionalArgs?: string[];
+}
+
+export interface NotificationConfig {
+  enabled: boolean;
+  webhookUrl?: string;
+  events?: string[];
+}
+
+export function defaultConfig(name: string, rootDir: string): GanAIConfig {
+  return {
+    project: { name, rootDir },
+    budget: {
+      maxCostUsd: 5.0,
+      maxRounds: 10,
+      maxDurationMinutes: 60,
+    },
+    agents: {
+      planner: {
+        allowedTools: ['Read', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'Write'],
+      },
+      generator: {},
+      evaluator: {
+        allowedTools: ['Read', 'Glob', 'Grep', 'Bash', 'Write'],
+      },
+    },
+    notification: { enabled: false },
+    autonomy: {
+      autoApproveDecisions: false,
+      autoApproveTimeoutMs: 300_000,
+    },
+  };
+}

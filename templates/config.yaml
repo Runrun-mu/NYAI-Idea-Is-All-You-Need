@@ -1,0 +1,38 @@
+project:
+  name: my-project
+  description: ""
+  rootDir: "."
+
+budget:
+  maxCostUsd: 5.00
+  maxRounds: 10
+  maxDurationMinutes: 60
+
+agents:
+  planner:
+    allowedTools:
+      - Read
+      - Glob
+      - Grep
+      - WebSearch
+      - WebFetch
+      - Write
+  generator: {}
+  evaluator:
+    allowedTools:
+      - Read
+      - Glob
+      - Grep
+      - Bash
+    disallowedTools:
+      - Write
+      - Edit
+
+notification:
+  enabled: false
+  # webhookUrl: "https://hooks.slack.com/..."
+  # events: ["done", "error", "decision:needed"]
+
+autonomy:
+  autoApproveDecisions: false
+  autoApproveTimeoutMs: 300000

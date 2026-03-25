@@ -1,0 +1,154 @@
+/* ========== Dashboard Stats ========== */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.stat-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  transition: border-color var(--transition-fast);
+}
+
+.stat-card:hover {
+  border-color: var(--border-light);
+}
+
+.stat-card-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stat-card-value {
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.stat-card-value.running { color: var(--accent-green); }
+.stat-card-value.stopped { color: var(--accent-yellow); }
+.stat-card-value.cost { color: var(--accent-blue); }
+
+/* ========== Dashboard Grid ========== */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+@media (max-width: 900px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dashboard-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+}
+
+.dashboard-card-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ========== Pie Chart ========== */
+.chart-container {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.chart-canvas-wrap {
+  flex-shrink: 0;
+}
+
+.chart-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.legend-value {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-left: 4px;
+}
+
+/* ========== Activity Log ========== */
+.activity-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.activity-item {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.activity-item:last-child {
+  border-bottom: none;
+}
+
+.activity-action {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.activity-time {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.activity-agent {
+  color: var(--accent-blue);
+  font-weight: 500;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-muted);
+}
+
+.empty-state-icon {
+  font-size: 40px;
+  margin-bottom: 12px;
+}
+
+.empty-state-text {
+  font-size: 14px;
+}

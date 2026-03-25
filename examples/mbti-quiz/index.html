@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MBTI 性格测试</title>
+<style>
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  color: #333;
+  line-height: 1.6;
+}
+
+.container {
+  width: 100%;
+  max-width: 640px;
+}
+
+.card {
+  background: #fff;
+  border-radius: 20px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+  padding: 40px 32px;
+  animation: fadeIn 0.5s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(30px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Welcome Screen */
+.welcome-title {
+  font-size: 2.2em;
+  font-weight: 700;
+  text-align: center;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 16px;
+}
+
+.welcome-desc {
+  text-align: center;
+  color: #666;
+  font-size: 1.05em;
+  margin-bottom: 32px;
+  line-height: 1.8;
+}
+
+.btn-start {
+  display: block;
+  width: 100%;
+  max-width: 280px;
+  margin: 0 auto;
+  padding: 16px 32px;
+  font-size: 1.15em;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: 0 4px 15px rgba(102,126,234,0.4);
+}
+
+.btn-start:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102,126,234,0.6);
+}
+
+.btn-start:active {
+  transform: translateY(0);
+}
+
+/* Progress */
+.progress-wrap {
+  margin-bottom: 28px;
+}
+
+.progress-text {
+  text-align: center;
+  font-size: 0.95em;
+  color: #888;
+  margin-bottom: 10px;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: #e9ecef;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #667eea, #764ba2);
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+/* Question */
+.question-text {
+  font-size: 1.2em;
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 28px;
+  color: #2d3748;
+  animation: slideIn 0.3s ease;
+}
+
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.option-btn {
+  width: 100%;
+  padding: 18px 20px;
+  font-size: 1.05em;
+  color: #4a5568;
+  background: #f7f8fc;
+  border: 2px solid #e2e8f0;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+  line-height: 1.5;
+  animation: slideIn 0.3s ease;
+}
+
+.option-btn:hover {
+  background: #eef0ff;
+  border-color: #667eea;
+  color: #667eea;
+  transform: translateX(4px);
+  box-shadow: 0 4px 12px rgba(102,126,234,0.15);
+}
+
+.option-btn:active {
+  transform: translateX(2px);
+  background: #e0e4ff;
+}
+
+/* Result Screen */
+.result-type {
+  text-align: center;
+  font-size: 3em;
+  font-weight: 800;
+  letter-spacing: 8px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 8px;
+}
+
+.result-label {
+  text-align: center;
+  color: #888;
+  font-size: 0.95em;
+  margin-bottom: 28px;
+}
+
+.dimension-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 10px;
+}
+
+.dim-label {
+  width: 28px;
+  font-weight: 700;
+  font-size: 1em;
+  text-align: center;
+  color: #667eea;
+}
+
+.dim-bar-wrap {
+  flex: 1;
+  height: 10px;
+  background: #e9ecef;
+  border-radius: 5px;
+  overflow: hidden;
+  position: relative;
+}
+
+.dim-bar-fill {
+  height: 100%;
+  border-radius: 5px;
+  transition: width 0.6s ease;
+}
+
+.dim-bar-fill.left {
+  background: linear-gradient(90deg, #667eea, #7c6aef);
+}
+
+.dim-bar-fill.right {
+  background: linear-gradient(90deg, #e9ecef, #e9ecef);
+}
+
+.dim-label-right {
+  width: 28px;
+  font-weight: 700;
+  font-size: 1em;
+  text-align: center;
+  color: #999;
+}
+
+.dim-percent {
+  width: 52px;
+  font-size: 0.85em;
+  color: #888;
+  text-align: right;
+}
+
+.dim-percent-right {
+  width: 52px;
+  font-size: 0.85em;
+  color: #888;
+  text-align: left;
+}
+
+.result-desc {
+  margin-top: 24px;
+  padding: 20px;
+  background: #f7f8fc;
+  border-radius: 14px;
+  color: #4a5568;
+  font-size: 1em;
+  line-height: 1.9;
+}
+
+.btn-retest {
+  display: block;
+  width: 100%;
+  max-width: 280px;
+  margin: 28px auto 0;
+  padding: 14px 32px;
+  font-size: 1.05em;
+  font-weight: 600;
+  color: #667eea;
+  background: #fff;
+  border: 2px solid #667eea;
+  border-radius: 50px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-retest:hover {
+  background: #667eea;
+  color: #fff;
+  box-shadow: 0 4px 15px rgba(102,126,234,0.4);
+}
+
+.btn-retest:active {
+  transform: translateY(1px);
+}
+
+.hidden {
+  display: none !important;
+}
+
+@media (max-width: 480px) {
+  .card {
+    padding: 28px 18px;
+    border-radius: 16px;
+  }
+  .welcome-title {
+    font-size: 1.7em;
+  }
+  .result-type {
+    font-size: 2.4em;
+    letter-spacing: 5px;
+  }
+  .question-text {
+    font-size: 1.08em;
+  }
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <!-- Welcome Screen -->
+  <div id="welcome" class="card">
+    <h1 class="welcome-title">MBTI 性格测试</h1>
+    <p class="welcome-desc">
+      迈尔斯-布里格斯性格分类指标（MBTI）是一种广泛使用的性格评估工具。<br>
+      通过回答以下问题，了解你属于16种性格类型中的哪一种。<br>
+      测试共有24道题，请根据你的第一反应选择最符合你的选项。
+    </p>
+    <button class="btn-start" id="btnStart">开始测试</button>
+  </div>
+
+  <!-- Question Screen -->
+  <div id="questionScreen" class="card hidden">
+    <div class="progress-wrap">
+      <div class="progress-text" id="progressText"></div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+    </div>
+    <div class="question-text" id="questionText"></div>
+    <div class="options" id="optionsWrap"></div>
+  </div>
+
+  <!-- Result Screen -->
+  <div id="resultScreen" class="card hidden">
+    <div class="result-type" id="resultType"></div>
+    <div class="result-label" id="resultLabel">你的性格类型</div>
+    <div id="dimensionBars"></div>
+    <div class="result-desc" id="resultDesc"></div>
+    <button class="btn-retest" id="btnRetest">重新测试</button>
+  </div>
+</div>
+
+<script>
+(function() {
+  // === Question Data: 24 questions, 6 per dimension ===
+  var questions = [
+    // E/I Dimension (6 questions)
+    { dimension: "EI", text: "在社交聚会上，你通常会：", options: [
+      { text: "主动与很多人交流，享受热闹的氛围", pole: "E" },
+      { text: "更倾向于和少数几个熟悉的人深入交谈", pole: "I" }
+    ]},
+    { dimension: "EI", text: "周末休息时，你更喜欢：", options: [
+      { text: "约朋友一起出去活动或聚餐", pole: "E" },
+      { text: "独自在家看书、看电影或做自己的事", pole: "I" }
+    ]},
+    { dimension: "EI", text: "在团队讨论中，你通常：", options: [
+      { text: "积极发言，喜欢在讨论中表达自己的想法", pole: "E" },
+      { text: "更愿意先倾听他人的观点，再整理自己的想法", pole: "I" }
+    ]},
+    { dimension: "EI", text: "当你感到压力大时，你会：", options: [
+      { text: "找朋友倾诉或出去走走来缓解压力", pole: "E" },
+      { text: "独处一段时间，安静地思考和调整", pole: "I" }
+    ]},
+    { dimension: "EI", text: "对于认识新朋友，你觉得：", options: [
+      { text: "这是一件令人兴奋和愉快的事情", pole: "E" },
+      { text: "需要花一些时间和精力，有时会觉得有点累", pole: "I" }
+    ]},
+    { dimension: "EI", text: "在工作或学习中，你更倾向于：", options: [
+      { text: "和他人协作完成任务，通过交流获得灵感", pole: "E" },
+      { text: "独立完成工作，在安静的环境中更有效率", pole: "I" }
+    ]},
+
+    // S/N Dimension (6 questions)
+    { dimension: "SN", text: "当学习一个新概念时，你更倾向于：", options: [
+      { text: "通过具体的例子和实际操作来理解", pole: "S" },
+      { text: "先理解整体框架和背后的原理", pole: "N" }
+    ]},
+    { dimension: "SN", text: "在描述一件事情时，你通常：", options: [
+      { text: "注重细节，按照事实准确地叙述", pole: "S" },
+      { text: "倾向于概括性的描述，关注事物的含义和联系", pole: "N" }
+    ]},
+    { dimension: "SN", text: "你更关注的是：", options: [
+      { text: "当前的现实情况和眼前的实际问题", pole: "S" },
+      { text: "未来的可能性和潜在的机会", pole: "N" }
+    ]},
+    { dimension: "SN", text: "在做决策时，你更看重：", options: [
+      { text: "过去的经验和已被证实的方法", pole: "S" },
+      { text: "创新的想法和全新的解决方案", pole: "N" }
+    ]},
+    { dimension: "SN", text: "你更喜欢哪种类型的工作：", options: [
+      { text: "有明确步骤和标准流程的工作", pole: "S" },
+      { text: "需要创造性思维和探索新方向的工作", pole: "N" }
+    ]},
+    { dimension: "SN", text: "阅读一篇文章时，你更关注：", options: [
+      { text: "具体的数据、事实和细节描述", pole: "S" },
+      { text: "文章传达的深层含义和启发性观点", pole: "N" }
+    ]},
+
+    // T/F Dimension (6 questions)
+    { dimension: "TF", text: "当朋友向你倾诉烦恼时，你通常会：", options: [
+      { text: "帮助分析问题并提出解决方案", pole: "T" },
+      { text: "先表达理解和同情，给予情感上的支持", pole: "F" }
+    ]},
+    { dimension: "TF", text: "在做重要决定时，你更依赖：", options: [
+      { text: "逻辑分析和客观事实", pole: "T" },
+      { text: "个人的价值观和对他人的影响", pole: "F" }
+    ]},
+    { dimension: "TF", text: "在评价一项工作成果时，你更看重：", options: [
+      { text: "是否达到了客观标准和技术要求", pole: "T" },
+      { text: "团队的努力和成员之间的协作配合", pole: "F" }
+    ]},
+    { dimension: "TF", text: "当团队中出现意见分歧时，你倾向于：", options: [
+      { text: "基于事实和逻辑来辩论，找到最优方案", pole: "T" },
+      { text: "寻求共识，注重维护团队和谐氛围", pole: "F" }
+    ]},
+    { dimension: "TF", text: "别人对你的评价中，你更希望被认为是：", options: [
+      { text: "一个理性、公正、有能力的人", pole: "T" },
+      { text: "一个善良、体贴、有同理心的人", pole: "F" }
+    ]},
+    { dimension: "TF", text: "面对批评意见时，你通常：", options: [
+      { text: "客观地分析批评内容是否合理", pole: "T" },
+      { text: "首先会关注到对方的态度和语气", pole: "F" }
+    ]},
+
+    // J/P Dimension (6 questions)
+    { dimension: "JP", text: "对于日常生活，你更倾向于：", options: [
+      { text: "制定计划并按计划执行", pole: "J" },
+      { text: "保持灵活，随机应变", pole: "P" }
+    ]},
+    { dimension: "JP", text: "关于截止日期和任务，你通常：", options: [
+      { text: "提前安排好时间，尽早完成", pole: "J" },
+      { text: "在截止日期临近时才发挥最佳状态", pole: "P" }
+    ]},
+    { dimension: "JP", text: "你的工作桌面或房间通常是：", options: [
+      { text: "整洁有序，每样东西都有固定的位置", pole: "J" },
+      { text: "比较随意，但自己能找到需要的东西", pole: "P" }
+    ]},
+    { dimension: "JP", text: "在旅行时，你更喜欢：", options: [
+      { text: "提前规划好行程和住宿安排", pole: "J" },
+      { text: "随心所欲地探索，保持行程的灵活性", pole: "P" }
+    ]},
+    { dimension: "JP", text: "当计划突然改变时，你的反应是：", options: [
+      { text: "感到不太舒服，更希望按原计划执行", pole: "J" },
+      { text: "觉得没什么大不了，甚至可能更期待新变化", pole: "P" }
+    ]},
+    { dimension: "JP", text: "你在开始一个项目时：", options: [
+      { text: "先制定详细的计划和步骤再动手", pole: "J" },
+      { text: "先动手尝试，边做边调整方向", pole: "P" }
+    ]}
+  ];
+
+  // === 16 MBTI Type Descriptions (Chinese) ===
+  var descriptions = {
+    "ISTJ": "ISTJ（检查者）——你是一个务实、可靠且注重责任的人。你重视传统和规则，做事有条不紊，善于制定和执行计划。你以严谨的态度对待工作和生活，是值得信赖的团队成员。你不喜欢冒险和变化，更倾向于在稳定的环境中发挥你的组织才能。",
+    "ISFJ": "ISFJ（保护者）——你是一个温暖、细心且忠诚的人。你善于关注他人的需要，乐于在背后默默地给予支持和帮助。你有很强的责任感和奉献精神，总是尽力维护和谐的关系。你注重实际，偏好有序的生活方式，在稳定的环境中能够发挥出最大的价值。",
+    "INFJ": "INFJ（辅导者）——你是一个富有洞察力、理想主义且充满同情心的人。你有着深刻的内在世界和强烈的直觉能力，能够看到事物的深层含义。你追求有意义的人际关系和生活目标，希望能对世界产生积极的影响。你虽然外表安静，但内心充满热情和坚定的信念。",
+    "INTJ": "INTJ（策划者）——你是一个独立、有远见且追求卓越的人。你善于战略性思考，能够将复杂的想法转化为可执行的计划。你对自己和他人都有很高的标准，不断追求知识和能力的提升。你重视效率和逻辑，偏好独立工作，在需要创新和解决复杂问题的领域中表现出色。",
+    "ISTP": "ISTP（手艺者）——你是一个冷静、务实且灵活的人。你善于分析事物的运作原理，喜欢动手解决实际问题。你崇尚效率，不喜欢不必要的规则和限制，更倾向于用最直接的方式达成目标。你在危机时刻能保持冷静，善于即兴应对各种突发状况。",
+    "ISFP": "ISFP（创作者）——你是一个温和、敏感且富有艺术气质的人。你重视个人自由和内心和谐，通过感官体验来认识和欣赏世界。你不喜欢冲突和对抗，更愿意以温和的方式表达自己。你虽然看起来安静内敛，但内心有着丰富的情感世界和独特的审美观。",
+    "INFP": "INFP（治愈者）——你是一个理想主义、富有创造力且内心世界丰富的人。你有着强烈的个人价值观和对美好事物的追求，总是寻求深层的人际连接和生活意义。你善于理解和同情他人，有着出色的文字表达能力。虽然你可能看起来安静和随和，但在涉及核心价值时会表现出坚定不移的态度。",
+    "INTP": "INTP（建筑师）——你是一个独立思考、好奇心强且逻辑严密的人。你热衷于探索理论和概念，喜欢分析复杂的系统和问题。你追求知识的深度和精确度，不轻易接受未经验证的观点。你虽然在社交上可能比较内敛，但在感兴趣的话题上会展现出极大的热情和深刻的见解。",
+    "ESTP": "ESTP（推动者）——你是一个精力充沛、务实且善于应变的人。你喜欢行动和冒险，善于把握当下的机会。你有很强的观察力和解决问题的能力，能够快速做出决策。你享受社交生活，有天然的说服力和领导力，在需要快速反应和灵活应对的环境中表现出色。",
+    "ESFP": "ESFP（表演者）——你是一个热情、友善且充满活力的人。你热爱生活，善于发现和创造快乐，是天生的社交高手。你关注当下的体验，喜欢与人分享快乐的时光。你有着敏锐的审美感和实际的动手能力，在需要创意和人际互动的领域中能够大放异彩。",
+    "ENFP": "ENFP（冠军）——你是一个热情洋溢、富有创造力且善于鼓舞他人的人。你对新想法和新可能性充满热情，善于发现每个人的潜力和独特之处。你追求真实的自我表达和深层的人际连接，讨厌虚伪和表面的东西。你虽然充满热情和活力，但也有着深刻的内在思考和对意义的追求。",
+    "ENTP": "ENTP（发明家）——你是一个机智、善辩且充满创新精神的人。你热衷于挑战常规思维，善于从不同角度看待问题。你有着出色的分析能力和口才，喜欢通过辩论来探索真理。你不喜欢循规蹈矩，总是在寻找更好的方法和新的可能性，在需要创新思维的领域中如鱼得水。",
+    "ESTJ": "ESTJ（监督者）——你是一个果断、务实且注重效率的人。你善于组织和管理，能够制定清晰的目标和执行计划。你重视规则和秩序，期望自己和他人都能遵守承诺和标准。你有着很强的责任感和执行力，在领导和管理岗位上能够发挥出最大的价值。",
+    "ESFJ": "ESFJ（供给者）——你是一个热心、体贴且注重人际关系的人。你善于照顾他人的需要，是团队中的粘合剂。你重视和谐的人际关系和社会传统，乐于参与社区活动和帮助他人。你有着很强的组织能力和实际操作能力，在需要协调和关怀的角色中表现出色。",
+    "ENFJ": "ENFJ（教师）——你是一个富有魅力、善于激励他人且充满理想的人。你有着天然的领导力和影响力，善于理解和引导他人发挥潜力。你追求有意义的目标和真挚的人际关系，不遗余力地帮助他人成长。你的热情和真诚能够感染周围的人，是天生的引导者和协调者。",
+    "ENTJ": "ENTJ（统帅）——你是一个自信、果断且具有远见的领导者。你善于制定战略目标和组织资源来实现宏大的计划。你对效率和卓越有着不懈的追求，能够激励团队朝着共同目标前进。你喜欢挑战和竞争，在领导复杂项目和推动变革方面有着卓越的才能。"
+  };
+
+  // === State ===
+  var currentQuestion = 0;
+  var answers = []; // { dimension, pole }
+
+  // === DOM Elements ===
+  var welcomeEl = document.getElementById("welcome");
+  var questionScreenEl = document.getElementById("questionScreen");
+  var resultScreenEl = document.getElementById("resultScreen");
+  var btnStart = document.getElementById("btnStart");
+  var btnRetest = document.getElementById("btnRetest");
+  var progressText = document.getElementById("progressText");
+  var progressFill = document.getElementById("progressFill");
+  var questionText = document.getElementById("questionText");
+  var optionsWrap = document.getElementById("optionsWrap");
+  var resultType = document.getElementById("resultType");
+  var dimensionBars = document.getElementById("dimensionBars");
+  var resultDesc = document.getElementById("resultDesc");
+
+  // === Functions ===
+  function showScreen(screen) {
+    welcomeEl.classList.add("hidden");
+    questionScreenEl.classList.add("hidden");
+    resultScreenEl.classList.add("hidden");
+    screen.classList.remove("hidden");
+    // Re-trigger animation
+    screen.style.animation = "none";
+    screen.offsetHeight; // force reflow
+    screen.style.animation = "";
+  }
+
+  function startTest() {
+    currentQuestion = 0;
+    answers = [];
+    showScreen(questionScreenEl);
+    renderQuestion();
+  }
+
+  function renderQuestion() {
+    var q = questions[currentQuestion];
+    var total = questions.length;
+    progressText.textContent = "第 " + (currentQuestion + 1) + " 题 / 共 " + total + " 题";
+    progressFill.style.width = ((currentQuestion + 1) / total * 100) + "%";
+
+    questionText.textContent = q.text;
+    // Re-trigger animation on question text
+    questionText.style.animation = "none";
+    questionText.offsetHeight;
+    questionText.style.animation = "";
+
+    optionsWrap.innerHTML = "";
+    q.options.forEach(function(opt) {
+      var btn = document.createElement("button");
+      btn.className = "option-btn";
+      btn.textContent = opt.text;
+      btn.style.animation = "none";
+      btn.offsetHeight;
+      btn.style.animation = "";
+      btn.addEventListener("click", function() {
+        selectOption(q.dimension, opt.pole);
+      });
+      optionsWrap.appendChild(btn);
+    });
+  }
+
+  function selectOption(dimension, pole) {
+    answers.push({ dimension: dimension, pole: pole });
+    currentQuestion++;
+    if (currentQuestion < questions.length) {
+      renderQuestion();
+    } else {
+      showResult();
+    }
+  }
+
+  function calculateResult() {
+    var counts = {
+      E: 0, I: 0,
+      S: 0, N: 0,
+      T: 0, F: 0,
+      J: 0, P: 0
+    };
+    answers.forEach(function(a) {
+      counts[a.pole]++;
+    });
+
+    // Determine each dimension; on tie default to I, N, F, P
+    var ei = counts.E > counts.I ? "E" : "I";
+    var sn = counts.S > counts.N ? "S" : "N";
+    var tf = counts.T > counts.F ? "T" : "F";
+    var jp = counts.J > counts.P ? "J" : "P";
+
+    var type = ei + sn + tf + jp;
+
+    var totalEI = counts.E + counts.I;
+    var totalSN = counts.S + counts.N;
+    var totalTF = counts.T + counts.F;
+    var totalJP = counts.J + counts.P;
+
+    return {
+      type: type,
+      dimensions: [
+        { left: "E", right: "I", leftCount: counts.E, rightCount: counts.I, total: totalEI },
+        { left: "S", right: "N", leftCount: counts.S, rightCount: counts.N, total: totalSN },
+        { left: "T", right: "F", leftCount: counts.T, rightCount: counts.F, total: totalTF },
+        { left: "J", right: "P", leftCount: counts.J, rightCount: counts.P, total: totalJP }
+      ]
+    };
+  }
+
+  function showResult() {
+    var result = calculateResult();
+    resultType.textContent = result.type;
+
+    dimensionBars.innerHTML = "";
+    result.dimensions.forEach(function(dim) {
+      var leftPct = dim.total > 0 ? Math.round(dim.leftCount / dim.total * 100) : 50;
+      var rightPct = 100 - leftPct;
+
+      var row = document.createElement("div");
+      row.className = "dimension-row";
+
+      row.innerHTML =
+        '<span class="dim-label">' + dim.left + '</span>' +
+        '<span class="dim-percent">' + leftPct + '%</span>' +
+        '<div class="dim-bar-wrap">' +
+          '<div class="dim-bar-fill left" style="width:' + leftPct + '%"></div>' +
+        '</div>' +
+        '<span class="dim-percent-right">' + rightPct + '%</span>' +
+        '<span class="dim-label-right">' + dim.right + '</span>';
+
+      dimensionBars.appendChild(row);
+    });
+
+    resultDesc.textContent = descriptions[result.type] || "暂无该类型的描述。";
+
+    showScreen(resultScreenEl);
+  }
+
+  function retest() {
+    currentQuestion = 0;
+    answers = [];
+    showScreen(welcomeEl);
+  }
+
+  // === Event Listeners ===
+  btnStart.addEventListener("click", startTest);
+  btnRetest.addEventListener("click", retest);
+})();
+</script>
+</body>
+</html>
