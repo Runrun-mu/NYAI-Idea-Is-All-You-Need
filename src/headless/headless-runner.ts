@@ -66,6 +66,28 @@ export function runHeadless(orchestrator: Orchestrator): void {
           `[${ts}] 📊 Total: $${event.totalCost.toFixed(4)} | ${event.rounds} rounds | ${Math.round(event.totalDuration / 1000)}s`
         );
         break;
+
+      case 'architect:done':
+        console.log(`[${ts}] 🏗️  Architect done — Tech stack: ${event.record.techStack.join(', ')}`);
+        if (event.record.decisions.length > 0) {
+          for (const d of event.record.decisions) {
+            console.log(`[${ts}]   📐 ${d}`);
+          }
+        }
+        break;
+
+      case 'feature:progress':
+        console.log(
+          `[${ts}] 📦 Feature ${event.featureIndex + 1}/${event.totalFeatures}: ${event.featureTitle} [${event.status}]`
+        );
+        break;
+
+      case 'eval:regression':
+        console.log(`[${ts}] ⚠️  Regressions detected (round ${event.round}):`);
+        for (const r of event.regressions) {
+          console.log(`[${ts}]   🔙 ${r.acId}: was PASS, now FAIL`);
+        }
+        break;
     }
   });
 }

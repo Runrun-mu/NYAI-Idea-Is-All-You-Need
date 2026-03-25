@@ -5,7 +5,8 @@ import type { State, StateHistoryEntry } from '../types/state';
  * This is a pure function — no I/O, no side effects.
  */
 const TRANSITIONS: Record<State, State[]> = {
-  IDLE: ['PLANNING'],
+  IDLE: ['ARCHITECTING', 'PLANNING'],
+  ARCHITECTING: ['PLANNING', 'ERROR'],
   PLANNING: ['CONTRACTING', 'ERROR'],
   CONTRACTING: ['GENERATING', 'ERROR'],
   GENERATING: ['EVALUATING', 'ERROR'],

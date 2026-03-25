@@ -22,7 +22,7 @@ export function buildPlannerInvocation(
 
   const harnessDir = join(config.project.rootDir, '.harness');
 
-  const prompt = `
+  let prompt = `
 ## User Requirement
 ${userPrompt}
 
@@ -37,6 +37,47 @@ Write the following files:
 Project root: ${config.project.rootDir}
 `.trim();
 
+  // Task decomposition mode
+  if (config.taskDecomposition) {
+    prompt += `
+
+## Task Decomposition Mode
+This requirement may be large. Break it down into smaller features.
+Write a features list as JSON to: \`${harnessDir}/features.json\`
+
+The JSON must have this structure:
+\`\`\`json
+{
+  "parentPrompt": "The original user requirement",
+  "features": [
+    {
+      "id": "F-1",
+      "title": "Feature title",
+      "description": "What this feature does",
+      "acceptanceCriteria": ["AC-1: Description", "AC-2: Description"]
+    }
+  ],
+  "createdAt": ${Date.now()},
+  "updatedAt": ${Date.now()}
+}
+\`\`\`
+
+Each feature should be small enough to implement in one sprint (1-5 acceptance criteria).
+Order features by dependency — foundational features first.`;
+  }
+
+  // Auto-decision mode
+  prompt += `
+
+## Scope Decisions
+If you need to make scope decisions (e.g., which tech to use, what to include/exclude),
+write your decisions to: \`${harnessDir}/decisions.log\`
+Each decision should be a JSON line with format:
+\`\`\`json
+{"id":"decision-...", "timestamp":..., "agentRole":"planner", "type":"scope", "summary":"...", "details":"...", "options":["..."], "autoDecision":true, "resolved":true, "resolution":"chosen option"}
+\`\`\`
+This allows your decisions to be reviewed and audited.`;
+
   return {
     role: 'planner',
     systemPrompt,
@@ -46,6 +87,8 @@ Project root: ${config.project.rootDir}
     ],
     maxTurns: config.agents.planner.maxTurns ?? 30,
     workingDir: config.project.rootDir,
+    backend: config.agents.planner.backend ?? config.backend,
+    model: config.agents.planner.model,
   };
 }
 

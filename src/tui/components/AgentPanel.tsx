@@ -9,13 +9,14 @@ interface AgentPanelProps {
 }
 
 const AGENT_LABELS: Record<AgentRole, { emoji: string; name: string }> = {
+  architect: { emoji: '🏗️', name: 'Architect' },
   planner: { emoji: '📋', name: 'Planner' },
   generator: { emoji: '⚡', name: 'Generator' },
   evaluator: { emoji: '🔍', name: 'Evaluator' },
 };
 
 export function AgentPanel({ agentStatuses, currentAgent }: AgentPanelProps) {
-  const roles: AgentRole[] = ['planner', 'generator', 'evaluator'];
+  const roles: AgentRole[] = ['architect', 'planner', 'generator', 'evaluator'];
 
   return (
     <Box flexDirection="column" width={28} borderStyle="round" borderColor="cyan" paddingX={1}>

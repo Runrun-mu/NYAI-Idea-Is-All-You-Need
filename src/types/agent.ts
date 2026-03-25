@@ -1,4 +1,6 @@
-export type AgentRole = 'planner' | 'generator' | 'evaluator';
+export type AgentRole = 'planner' | 'generator' | 'evaluator' | 'architect';
+
+export type BackendType = 'claude' | 'codex' | 'opencode';
 
 export interface AgentInvocation {
   role: AgentRole;
@@ -8,6 +10,8 @@ export interface AgentInvocation {
   disallowedTools?: string[];
   maxTurns?: number;
   workingDir: string;
+  backend?: BackendType;
+  model?: string;
 }
 
 export interface ClaudeJsonOutput {

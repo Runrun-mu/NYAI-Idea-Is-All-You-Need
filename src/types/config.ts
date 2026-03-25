@@ -1,3 +1,5 @@
+import type { BackendType } from './agent';
+
 export interface NYAIConfig {
   project: {
     name: string;
@@ -13,12 +15,18 @@ export interface NYAIConfig {
     planner: AgentConfig;
     generator: AgentConfig;
     evaluator: AgentConfig;
+    architect?: AgentConfig;
   };
   notification?: NotificationConfig;
   autonomy: {
     autoApproveDecisions: boolean;
     autoApproveTimeoutMs: number;
   };
+  backend?: BackendType;
+  skipArchitect?: boolean;
+  testFirst?: boolean;
+  taskDecomposition?: boolean;
+  gitAutoCommit?: boolean;
 }
 
 export interface AgentConfig {
@@ -28,6 +36,7 @@ export interface AgentConfig {
   allowedTools?: string[];
   disallowedTools?: string[];
   additionalArgs?: string[];
+  backend?: BackendType;
 }
 
 export interface NotificationConfig {
@@ -58,5 +67,6 @@ export function defaultConfig(name: string, rootDir: string): NYAIConfig {
       autoApproveDecisions: false,
       autoApproveTimeoutMs: 300_000,
     },
+    testFirst: true,
   };
 }

@@ -10,6 +10,7 @@ import { runAgent } from '../agents/agent-runner';
 import { buildPlannerInvocation } from '../agents/planner';
 import { buildGeneratorInvocation } from '../agents/generator';
 import { buildEvaluatorInvocation } from '../agents/evaluator';
+import { buildArchitectInvocation } from '../agents/architect';
 import {
   ensureHarnessDir,
   parseEvalVerdict,
@@ -17,7 +18,11 @@ import {
   getLatestReport,
 } from '../protocol/file-protocol';
 import { saveState, loadState } from '../protocol/state-store';
-import { appendDecision } from '../protocol/decision-logger';
+import { appendDecision, readPendingDecisions } from '../protocol/decision-logger';
+import { hasArchitectureRecord, readArchitectureRecord } from '../protocol/architecture';
+import { appendProgress } from '../protocol/progress-logger';
+import { gitAutoCommit } from '../protocol/git-integration';
+import { readFeatureList, updateFeatureStatus, getNextPendingFeature } from '../protocol/feature-tracker';
 
 export class Orchestrator extends EventEmitter {
   private config: NYAIConfig;
@@ -47,6 +52,7 @@ export class Orchestrator extends EventEmitter {
       lastEvalVerdict: null,
       stuckCount: 0,
       failedAcIds: [],
+      previouslyPassedAcs: [],
     };
   }
 
@@ -68,9 +74,92 @@ export class Orchestrator extends EventEmitter {
     this.state.round = 0;
 
     try {
+      // Phase 0: Architect (optional — for new projects or when configured)
+      if (
+        !this.config.skipArchitect &&
+        this.config.agents.architect &&
+        !hasArchitectureRecord(this.harnessDir)
+      ) {
+        await this.transitionTo('ARCHITECTING', 'Starting architect phase');
+        await this.runArchitectAgent(prompt, sprintId);
+      }
+
       // Phase 1: Planning
       await this.transitionTo('PLANNING', 'Starting planning phase');
       await this.runPlannerAgent(prompt, sprintId);
+
+      // Check for auto-decisions from planner
+      const pendingAutoDecisions = readPendingDecisions(this.harnessDir)
+        .filter((d) => d.autoDecision && !d.resolved);
+      for (const decision of pendingAutoDecisions) {
+        this.emitEvent({
+          type: 'decision:needed',
+          decision,
+          timestamp: Date.now(),
+        });
+        // Auto-approve after timeout or immediately in headless
+        if (this.config.autonomy.autoApproveDecisions) {
+          this.emitEvent({
+            type: 'decision:resolved',
+            decisionId: decision.id,
+            resolution: decision.options[0] ?? 'approved',
+            timestamp: Date.now(),
+          });
+        }
+      }
+
+      // Check if task decomposition produced features
+      if (this.config.taskDecomposition) {
+        const featureList = readFeatureList(this.harnessDir);
+        if (featureList && featureList.features.length > 1) {
+          // Run each feature as a mini-sprint
+          this.state.totalFeatures = featureList.features.length;
+          for (let i = 0; i < featureList.features.length; i++) {
+            if (this.abortController.signal.aborted) break;
+            if (this.costTracker.isOverBudget()) break;
+
+            const feature = featureList.features[i];
+            if (feature.status === 'done' || feature.status === 'skipped') continue;
+
+            this.state.currentFeatureIndex = i;
+            const featureSprintId = `${sprintId}-F${i + 1}`;
+
+            this.emitEvent({
+              type: 'feature:progress',
+              featureIndex: i,
+              totalFeatures: featureList.features.length,
+              featureTitle: feature.title,
+              status: 'started',
+              timestamp: Date.now(),
+            });
+
+            updateFeatureStatus(this.harnessDir, feature.id, 'in_progress', featureSprintId);
+            await this.runFeatureSprint(featureSprintId, feature.title);
+            updateFeatureStatus(this.harnessDir, feature.id, 'done', featureSprintId);
+
+            this.emitEvent({
+              type: 'feature:progress',
+              featureIndex: i,
+              totalFeatures: featureList.features.length,
+              featureTitle: feature.title,
+              status: 'completed',
+              timestamp: Date.now(),
+            });
+          }
+
+          // All features done
+          await this.transitionTo('DONE', 'All features completed');
+          this.emitEvent({
+            type: 'done',
+            summary: `Sprint ${sprintId} completed with ${featureList.features.length} features.`,
+            totalCost: this.costTracker.getSpent(),
+            totalDuration: Date.now() - this.state.startedAt,
+            rounds: this.state.round,
+            timestamp: Date.now(),
+          });
+          return;
+        }
+      }
 
       // Phase 2: Contracting (combined with planning in our flow)
       await this.transitionTo('CONTRACTING', 'Creating sprint contract');
@@ -114,11 +203,24 @@ export class Orchestrator extends EventEmitter {
           ? JSON.stringify(prevReport.failedAcs, null, 2)
           : undefined;
 
-        await this.runGeneratorAgent(sprintId, this.state.round, prevFeedback);
+        // Detect regressions from previous report
+        const lastRegressions = prevReport?.regressions ?? [];
+
+        await this.runGeneratorAgent(
+          sprintId,
+          this.state.round,
+          prevFeedback,
+          this.state.previouslyPassedAcs,
+          lastRegressions
+        );
 
         // Evaluate
         await this.transitionTo('EVALUATING', `Evaluating round ${this.state.round}`);
-        const evalOutput = await this.runEvaluatorAgent(sprintId, this.state.round);
+        const evalOutput = await this.runEvaluatorAgent(
+          sprintId,
+          this.state.round,
+          this.state.previouslyPassedAcs
+        );
 
         // Parse verdict
         const evalResult = parseEvalVerdict(
@@ -139,10 +241,48 @@ export class Orchestrator extends EventEmitter {
             timestamp: Date.now(),
           });
 
+          // Update previouslyPassedAcs — accumulate all ACs that ever passed
+          for (const ac of report.passedAcs) {
+            if (!this.state.previouslyPassedAcs.includes(ac)) {
+              this.state.previouslyPassedAcs.push(ac);
+            }
+          }
+
+          // Regression detection: check if any previously-passed AC is now failing
+          const currentPassedSet = new Set(report.passedAcs);
+          const regressions = this.state.previouslyPassedAcs
+            .filter((ac) => !currentPassedSet.has(ac))
+            .filter((ac) => report.failedAcs.some((f) => f.id === ac))
+            .map((ac) => ({
+              acId: ac,
+              description: report.failedAcs.find((f) => f.id === ac)?.description ?? '',
+              previousStatus: 'PASS' as const,
+              currentStatus: 'FAIL' as const,
+              round: this.state.round,
+            }));
+
+          if (regressions.length > 0) {
+            // Add regressions to the report
+            report.regressions = regressions;
+            this.emitEvent({
+              type: 'eval:regression',
+              regressions,
+              round: this.state.round,
+              timestamp: Date.now(),
+            });
+          }
+
           // Stuck detection
           const currentFailedIds = report.failedAcs.map((f) => f.id);
           const stuck = isStuck(currentFailedIds, this.state.failedAcIds);
           this.state.failedAcIds = currentFailedIds;
+
+          // Git auto-commit after each eval round
+          if (this.config.gitAutoCommit) {
+            const tag = `nyai/${sprintId}-round-${this.state.round}`;
+            const commitMsg = `nyai: ${sprintId} round ${this.state.round} — ${verdict}`;
+            gitAutoCommit(this.config.project.rootDir, commitMsg, tag);
+          }
 
           if (stuck) {
             this.state.stuckCount++;
@@ -233,6 +373,21 @@ export class Orchestrator extends EventEmitter {
 
   // ─── Agent Runners ─────────────────────────────────────────────
 
+  private async runArchitectAgent(prompt: string, sprintId: string): Promise<void> {
+    const invocation = buildArchitectInvocation(this.config, prompt, sprintId);
+    const result = await this.runAgentWithEvents(invocation);
+
+    // Try to parse and emit the architecture record
+    const record = readArchitectureRecord(this.harnessDir);
+    if (record) {
+      this.emitEvent({
+        type: 'architect:done',
+        record,
+        timestamp: Date.now(),
+      });
+    }
+  }
+
   private async runPlannerAgent(prompt: string, sprintId: string): Promise<void> {
     const invocation = buildPlannerInvocation(this.config, prompt, sprintId);
     await this.runAgentWithEvents(invocation);
@@ -241,21 +396,90 @@ export class Orchestrator extends EventEmitter {
   private async runGeneratorAgent(
     sprintId: string,
     round: number,
-    previousFeedback?: string
+    previousFeedback?: string,
+    previouslyPassedAcs?: string[],
+    regressions?: import('../types/protocol').RegressionInfo[]
   ): Promise<void> {
     const invocation = buildGeneratorInvocation(
       this.config,
       sprintId,
       round,
-      previousFeedback
+      previousFeedback,
+      previouslyPassedAcs,
+      regressions
     );
     await this.runAgentWithEvents(invocation);
   }
 
-  private async runEvaluatorAgent(sprintId: string, round: number): Promise<string> {
-    const invocation = buildEvaluatorInvocation(this.config, sprintId, round);
+  private async runEvaluatorAgent(
+    sprintId: string,
+    round: number,
+    previouslyPassedAcs?: string[]
+  ): Promise<string> {
+    const invocation = buildEvaluatorInvocation(
+      this.config,
+      sprintId,
+      round,
+      previouslyPassedAcs
+    );
     const result = await this.runAgentWithEvents(invocation);
     return result.output;
+  }
+
+  /**
+   * Run a mini-sprint for a single feature (generate ↔ evaluate loop).
+   * Extracted from the main run loop to support task decomposition.
+   */
+  private async runFeatureSprint(featureSprintId: string, featureTitle: string): Promise<void> {
+    // Contracting
+    await this.transitionTo('CONTRACTING', `Feature: ${featureTitle}`);
+    await this.transitionTo('GENERATING', `Generating: ${featureTitle}`);
+
+    let featureDone = false;
+    let featureRound = 0;
+
+    while (!featureDone && !this.abortController.signal.aborted) {
+      featureRound++;
+      this.state.round++;
+
+      if (this.costTracker.isOverBudget()) break;
+      if (featureRound > this.config.budget.maxRounds) break;
+
+      // Generate
+      if (this.state.state !== 'GENERATING') {
+        await this.transitionTo('GENERATING', `Feature round ${featureRound}`);
+      }
+      const prevReport = getLatestReport(this.harnessDir, featureSprintId);
+      const prevFeedback = prevReport
+        ? JSON.stringify(prevReport.failedAcs, null, 2)
+        : undefined;
+
+      await this.runGeneratorAgent(featureSprintId, featureRound, prevFeedback);
+
+      // Evaluate
+      await this.transitionTo('EVALUATING', `Evaluating feature round ${featureRound}`);
+      const evalOutput = await this.runEvaluatorAgent(featureSprintId, featureRound);
+
+      const evalResult = parseEvalVerdict(
+        this.harnessDir,
+        featureSprintId,
+        featureRound,
+        evalOutput
+      );
+
+      if (evalResult) {
+        const { verdict } = evalResult;
+        if (verdict === 'PASS') {
+          featureDone = true;
+        } else if (featureRound >= this.config.budget.maxRounds) {
+          featureDone = true; // give up
+        }
+      } else {
+        featureDone = true; // no verdict, move on
+      }
+
+      this.persistState();
+    }
   }
 
   private async runAgentWithEvents(
@@ -379,8 +603,14 @@ export class Orchestrator extends EventEmitter {
   // ─── Helpers ───────────────────────────────────────────────────
 
   private emitEvent(event: OrchestratorEvent): void {
+    // Log all events to progress file
+    try {
+      appendProgress(this.harnessDir, event.type, JSON.stringify(event));
+    } catch {
+      // Non-fatal
+    }
+
     // Avoid Node's special 'error' event behavior (throws if no listener)
-    // We use our own 'error' type string which gets caught by '*' wildcard
     if (event.type === 'error') {
       this.emit('nyai:error', event);
     } else {

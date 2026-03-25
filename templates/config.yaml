@@ -8,7 +8,34 @@ budget:
   maxRounds: 10
   maxDurationMinutes: 60
 
+# Backend: which AI CLI to use (claude | codex | opencode)
+# backend: claude
+
+# Skip the Architect agent phase (useful for existing projects)
+# skipArchitect: true
+
+# Test-first: require Generator to write tests before implementation (default: true)
+# testFirst: true
+
+# Task decomposition: break large requirements into features (default: false)
+# taskDecomposition: false
+
+# Git auto-commit: commit after each eval round with tags (default: false)
+# gitAutoCommit: false
+
 agents:
+  # Architect agent — runs first to determine tech stack and scaffolding
+  # architect:
+  #   maxTurns: 30
+  #   backend: claude
+  #   allowedTools:
+  #     - Read
+  #     - Glob
+  #     - Grep
+  #     - Bash
+  #     - Write
+  #     - Edit
+
   planner:
     allowedTools:
       - Read
@@ -17,7 +44,14 @@ agents:
       - WebSearch
       - WebFetch
       - Write
+    # backend: claude
+    # model: claude-sonnet-4-20250514
+
   generator: {}
+    # backend: claude
+    # model: claude-sonnet-4-20250514
+    # maxTurns: 100
+
   evaluator:
     allowedTools:
       - Read
@@ -27,6 +61,8 @@ agents:
     disallowedTools:
       - Write
       - Edit
+    # backend: claude
+    # model: claude-sonnet-4-20250514
 
 notification:
   enabled: false

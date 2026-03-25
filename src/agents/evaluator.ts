@@ -8,7 +8,8 @@ const EVALUATOR_PROMPT_PATH = join(import.meta.dir, '..', 'prompts', 'evaluator.
 export function buildEvaluatorInvocation(
   config: NYAIConfig,
   sprintId: string,
-  round: number
+  round: number,
+  previouslyPassedAcs?: string[]
 ): AgentInvocation {
   let systemPrompt: string;
   try {
@@ -21,8 +22,9 @@ export function buildEvaluatorInvocation(
   }
 
   const harnessDir = join(config.project.rootDir, '.harness');
+  const testFirst = config.testFirst !== false; // default true
 
-  const prompt = `
+  let prompt = `
 ## Sprint
 - Sprint ID: ${sprintId}
 - Round: ${round}
@@ -49,10 +51,38 @@ The JSON must have this structure:
     { "id": "AC-3", "description": "...", "reason": "Why it failed" }
   ],
   "suggestions": ["Suggestion for improvement"],
-  "score": 85
+  "score": 85,
+  "regressions": [
+    { "acId": "AC-1", "description": "...", "previousStatus": "PASS", "currentStatus": "FAIL", "round": ${round} }
+  ]
 }
 \`\`\`
 `.trim();
+
+  // Regression detection
+  if (previouslyPassedAcs && previouslyPassedAcs.length > 0) {
+    prompt += `
+
+## 🛡️ REGRESSION DETECTION (CRITICAL)
+The following acceptance criteria PASSED in previous rounds:
+${previouslyPassedAcs.map((ac) => `- ✅ ${ac}`).join('\n')}
+
+**You MUST check each of these**. If any of them now FAIL, report them in the "regressions" array.
+A regression is a CRITICAL issue — if any regressions are found, the verdict MUST NOT be "PASS".`;
+  }
+
+  // Test-first verification
+  if (testFirst) {
+    prompt += `
+
+## ⚡ TEST-FIRST VERIFICATION
+The Generator was instructed to write tests BEFORE implementation.
+Please verify:
+1. Test files exist for the acceptance criteria
+2. Tests are runnable (not just stubs)
+3. Tests cover the core behavior
+If tests are missing or non-functional, note this in your evaluation.`;
+  }
 
   return {
     role: 'evaluator',
@@ -64,6 +94,8 @@ The JSON must have this structure:
     disallowedTools: config.agents.evaluator.disallowedTools ?? ['Write', 'Edit'],
     maxTurns: config.agents.evaluator.maxTurns ?? 50,
     workingDir: config.project.rootDir,
+    backend: config.agents.evaluator.backend ?? config.backend,
+    model: config.agents.evaluator.model,
   };
 }
 
@@ -76,7 +108,8 @@ Your role is a **Senior QA Engineer**. Given a Feature Spec and implementation, 
 2. **Review** the implementation thoroughly
 3. **Run tests** if available
 4. **Evaluate** each acceptance criterion — PASS or FAIL with reasons
-5. **Write** a structured evaluation report
+5. **Check for regressions** — previously passing criteria must still pass
+6. **Write** a structured evaluation report
 
 ## Rules
 - Be strict but fair — only PASS criteria that are fully met
@@ -84,11 +117,12 @@ Your role is a **Senior QA Engineer**. Given a Feature Spec and implementation, 
 - Run actual tests, don't just read test files
 - Check for edge cases, error handling, code quality
 - You CANNOT modify code — only read and run tests
+- Regressions are CRITICAL — flag them prominently
 
 ## Verdict Guidelines
-- **PASS**: ALL acceptance criteria are met
+- **PASS**: ALL acceptance criteria are met AND no regressions
 - **PARTIAL**: Some but not all criteria are met
-- **FAIL**: Critical criteria are not met
+- **FAIL**: Critical criteria are not met OR regressions detected
 
 ## Important
 - Write your evaluation report as JSON to the path specified

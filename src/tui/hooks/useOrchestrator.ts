@@ -38,6 +38,7 @@ export interface AgentStatus {
 const MAX_LOG_LINES = 200;
 
 const initialAgentStatuses: Record<AgentRole, AgentStatus> = {
+  architect: { status: 'idle' },
   planner: { status: 'idle' },
   generator: { status: 'idle' },
   evaluator: { status: 'idle' },

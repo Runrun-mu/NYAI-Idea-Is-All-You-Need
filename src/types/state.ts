@@ -2,6 +2,7 @@
 
 export type State =
   | 'IDLE'
+  | 'ARCHITECTING'
   | 'PLANNING'
   | 'CONTRACTING'
   | 'GENERATING'
@@ -32,6 +33,9 @@ export interface OrchestratorState {
   lastEvalVerdict: import('./protocol').EvalVerdict | null;
   stuckCount: number;
   failedAcIds: string[];
+  currentFeatureIndex?: number;
+  totalFeatures?: number;
+  previouslyPassedAcs: string[];
 }
 
 // ─── Pending Decision ──────────────────────────────────────────────
@@ -48,4 +52,5 @@ export interface PendingDecision {
   resolved?: boolean;
   resolution?: string;
   resolvedAt?: number;
+  autoDecision?: boolean;
 }

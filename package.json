@@ -1,6 +1,6 @@
 {
   "name": "nyai",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "NYAI — Idea Is All You Need — Autonomous AI Agent Orchestrator with immersive TUI",
   "type": "module",
   "main": "src/index.ts",
@@ -22,8 +22,9 @@
     "commander": "^13.1.0"
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
     "@types/react": "^18.3.18",
-    "typescript": "^5.7.0",
-    "@anthropic-ai/sdk": "^0.39.0"
+    "bun-types": "^1.3.11",
+    "typescript": "^5.7.0"
   }
 }

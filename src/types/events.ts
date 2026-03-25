@@ -1,6 +1,6 @@
 import type { AgentRole, AgentResult } from './agent';
 import type { State, PendingDecision } from './state';
-import type { EvalVerdict, EvalReport } from './protocol';
+import type { EvalVerdict, EvalReport, ArchitectureRecord, RegressionInfo } from './protocol';
 
 // ─── Tagged Union of all Orchestrator Events ───────────────────────
 
@@ -14,7 +14,10 @@ export type OrchestratorEvent =
   | DecisionResolvedEvent
   | CostUpdateEvent
   | ErrorEvent
-  | DoneEvent;
+  | DoneEvent
+  | ArchitectDoneEvent
+  | FeatureProgressEvent
+  | RegressionDetectedEvent;
 
 export interface StateChangeEvent {
   type: 'state:change';
@@ -83,5 +86,29 @@ export interface DoneEvent {
   totalCost: number;
   totalDuration: number;
   rounds: number;
+  timestamp: number;
+}
+
+// ─── New Events (v0.2) ───────────────────────────────────────────
+
+export interface ArchitectDoneEvent {
+  type: 'architect:done';
+  record: ArchitectureRecord;
+  timestamp: number;
+}
+
+export interface FeatureProgressEvent {
+  type: 'feature:progress';
+  featureIndex: number;
+  totalFeatures: number;
+  featureTitle: string;
+  status: 'started' | 'completed' | 'skipped';
+  timestamp: number;
+}
+
+export interface RegressionDetectedEvent {
+  type: 'eval:regression';
+  regressions: RegressionInfo[];
+  round: number;
   timestamp: number;
 }

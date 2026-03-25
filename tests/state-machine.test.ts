@@ -7,6 +7,22 @@ describe('canTransition', () => {
     expect(canTransition('IDLE', 'PLANNING')).toBe(true);
   });
 
+  test('IDLE → ARCHITECTING is valid', () => {
+    expect(canTransition('IDLE', 'ARCHITECTING')).toBe(true);
+  });
+
+  test('ARCHITECTING → PLANNING is valid', () => {
+    expect(canTransition('ARCHITECTING', 'PLANNING')).toBe(true);
+  });
+
+  test('ARCHITECTING → ERROR is valid', () => {
+    expect(canTransition('ARCHITECTING', 'ERROR')).toBe(true);
+  });
+
+  test('ARCHITECTING → DONE is invalid', () => {
+    expect(canTransition('ARCHITECTING', 'DONE')).toBe(false);
+  });
+
   test('PLANNING → CONTRACTING is valid', () => {
     expect(canTransition('PLANNING', 'CONTRACTING')).toBe(true);
   });
@@ -44,7 +60,7 @@ describe('canTransition', () => {
   });
 
   test('any state → ERROR is valid (except DONE/ERROR)', () => {
-    const statesWithError: State[] = ['PLANNING', 'CONTRACTING', 'GENERATING', 'EVALUATING', 'BLOCKED'];
+    const statesWithError: State[] = ['ARCHITECTING', 'PLANNING', 'CONTRACTING', 'GENERATING', 'EVALUATING', 'BLOCKED'];
     for (const s of statesWithError) {
       expect(canTransition(s, 'ERROR')).toBe(true);
     }
