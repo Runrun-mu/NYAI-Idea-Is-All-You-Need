@@ -13,6 +13,7 @@
 [![Ink](https://img.shields.io/badge/TUI-Ink_5_(React)-61dafb?style=flat-square&logo=react)](https://github.com/vadimdemedes/ink)
 [![Claude](https://img.shields.io/badge/LLM-Claude_Code-cc785c?style=flat-square)](https://claude.ai)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
+[![Website](https://img.shields.io/badge/website-nyaiweb.vercel.app-7c3aed?style=flat-square&logo=vercel)](https://nyaiweb.vercel.app)
 
 <br>
 
