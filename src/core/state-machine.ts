@@ -13,7 +13,7 @@ const TRANSITIONS: Record<State, State[]> = {
   GENERATING: ['EVALUATING', 'REPLANNING', 'ERROR'],
   EVALUATING: ['GENERATING', 'CHECKPOINT', 'DONE', 'BLOCKED', 'REPLANNING', 'ERROR'],  // v0.6: can go to CHECKPOINT
   REPLANNING: ['GENERATING', 'DONE', 'ERROR'],
-  CHECKPOINT: ['GENERATING', 'GOAL_ACCEPTANCE', 'DEPLOYING', 'DONE', 'ERROR'],  // v0.6: after checkpoint → next feature, goal acceptance, or deploy
+  CHECKPOINT: ['CONTRACTING', 'GENERATING', 'GOAL_ACCEPTANCE', 'DEPLOYING', 'DONE', 'ERROR'],  // v0.6: after checkpoint → next feature (contract), goal acceptance, or deploy
   GOAL_ACCEPTANCE: ['PLANNING', 'DEPLOYING', 'DONE', 'BLOCKED', 'ERROR'],       // v0.6: goal acceptance → done, deploy, replan, or blocked
   DEPLOYING: ['DONE', 'ERROR'],                                                  // v0.4: deployer → done or error
   BLOCKED: ['GENERATING', 'DONE', 'ERROR'],
