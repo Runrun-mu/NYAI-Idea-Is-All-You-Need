@@ -10,7 +10,11 @@ export interface NYAIConfig {
     maxCostUsd: number;
     maxRounds: number;
     maxDurationMinutes: number;
+    generatorTimeoutMs?: number;
+    evaluatorTimeoutMs?: number;
+    plannerTimeoutMs?: number;
   };
+  parallelGenerators?: number;
   agents: {
     planner: AgentConfig;
     generator: AgentConfig;
@@ -27,6 +31,16 @@ export interface NYAIConfig {
   testFirst?: boolean;
   taskDecomposition?: boolean;
   gitAutoCommit?: boolean;
+  testing?: {
+    requireTestPlan?: boolean;       // default true
+    requireTestExecution?: boolean;  // default true
+    preferredTestRunner?: string;    // "vitest" | "bun:test"
+  };
+  memory?: {
+    enabled: boolean;  // default true
+    maxHistory?: number;
+    maxKnowledgeInPrompt?: number;
+  };
 }
 
 export interface AgentConfig {

@@ -28,6 +28,7 @@ describe('ensureHarnessDir', () => {
     expect(existsSync(join(HARNESS_DIR, 'specs'))).toBe(true);
     expect(existsSync(join(HARNESS_DIR, 'contracts'))).toBe(true);
     expect(existsSync(join(HARNESS_DIR, 'reports'))).toBe(true);
+    expect(existsSync(join(HARNESS_DIR, 'test-plans'))).toBe(true);
   });
 });
 

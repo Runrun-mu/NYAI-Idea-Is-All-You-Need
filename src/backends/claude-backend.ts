@@ -1,5 +1,6 @@
 import type { BackendAdapter } from './backend';
-import type { AgentInvocation, ClaudeJsonOutput } from '../types/agent';
+import type { AgentInvocation } from '../types/agent';
+import { parseClaudeJson } from './json-parser';
 
 export class ClaudeBackend implements BackendAdapter {
   command = 'claude';
@@ -39,23 +40,12 @@ export class ClaudeBackend implements BackendAdapter {
   parseOutput(
     role: AgentInvocation['role'],
     stdout: string,
-    exitCode: number
+    exitCode: number,
+    stderr?: string
   ) {
-    try {
-      const jsonMatch = stdout.match(/\{[\s\S]*"type"\s*:\s*"result"[\s\S]*\}/);
-      if (!jsonMatch) {
-        return {
-          success: exitCode === 0,
-          output: stdout.trim(),
-          costUsd: 0,
-          durationMs: 0,
-          numTurns: 0,
-          sessionId: '',
-          error: exitCode !== 0 ? `Exit code: ${exitCode}` : undefined,
-        };
-      }
+    const { json, costUsd, source } = parseClaudeJson(stdout, stderr);
 
-      const json: ClaudeJsonOutput = JSON.parse(jsonMatch[0]);
+    if (json) {
       return {
         success: !json.is_error && json.subtype === 'success',
         output: json.result,
@@ -65,16 +55,19 @@ export class ClaudeBackend implements BackendAdapter {
         sessionId: json.session_id ?? '',
         error: json.is_error ? json.result : undefined,
       };
-    } catch {
-      return {
-        success: exitCode === 0,
-        output: stdout.trim(),
-        costUsd: 0,
-        durationMs: 0,
-        numTurns: 0,
-        sessionId: '',
-        error: `Failed to parse JSON output. Exit code: ${exitCode}`,
-      };
     }
+
+    // No JSON parsed — use fallback cost from stderr if available
+    return {
+      success: exitCode === 0,
+      output: stdout.trim(),
+      costUsd,
+      durationMs: 0,
+      numTurns: 0,
+      sessionId: '',
+      error: exitCode !== 0
+        ? `Exit code: ${exitCode}${source !== 'none' ? ` (cost recovered from ${source})` : ''}`
+        : undefined,
+    };
   }
 }

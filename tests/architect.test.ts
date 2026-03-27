@@ -39,6 +39,23 @@ describe('buildArchitectInvocation', () => {
     expect(inv.maxTurns).toBe(20);
   });
 
+  test('prompt includes test infrastructure requirements', () => {
+    const config: NYAIConfig = {
+      ...defaultConfig('test', TEST_DIR),
+      agents: {
+        ...defaultConfig('test', TEST_DIR).agents,
+        architect: {},
+      },
+    };
+
+    const inv = buildArchitectInvocation(config, 'Build a chat app', 'sprint-1');
+    expect(inv.userPrompt).toContain('test infrastructure');
+    expect(inv.userPrompt).toContain('testInfra');
+    expect(inv.userPrompt).toContain('unitRunner');
+    expect(inv.userPrompt).toContain('unitCommand');
+    expect(inv.userPrompt).toContain('package.json');
+  });
+
   test('uses default allowed tools', () => {
     const config: NYAIConfig = {
       ...defaultConfig('test', TEST_DIR),

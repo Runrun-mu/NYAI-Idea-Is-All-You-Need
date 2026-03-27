@@ -24,7 +24,8 @@ export class OpencodeBackend implements BackendAdapter {
   parseOutput(
     role: AgentInvocation['role'],
     stdout: string,
-    exitCode: number
+    exitCode: number,
+    _stderr?: string
   ) {
     // OpenCode outputs plain text
     return {

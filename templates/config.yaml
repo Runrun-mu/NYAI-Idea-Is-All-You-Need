@@ -7,6 +7,12 @@ budget:
   maxCostUsd: 5.00
   maxRounds: 10
   maxDurationMinutes: 60
+  # generatorTimeoutMs: 1200000  # 20 minutes (default)
+  # evaluatorTimeoutMs: 900000   # 15 minutes (default)
+  # plannerTimeoutMs: 900000     # 15 minutes (default)
+
+# Number of parallel generators (default: 1 = sequential)
+# parallelGenerators: 1
 
 # Backend: which AI CLI to use (claude | codex | opencode)
 # backend: claude

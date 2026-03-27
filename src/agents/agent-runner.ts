@@ -14,18 +14,21 @@ interface RunAgentOptions {
  * Spawns the appropriate backend CLI as a child process.
  * - Uses the BackendAdapter strategy pattern to build args and parse output
  * - stderr is streamed line-by-line via onStderrLine callback (real-time logs)
+ * - stderr is also accumulated and passed to backend.parseOutput for fallback parsing
  * - stdout is collected and parsed for the structured result
  * - Supports mock mode via NYAI_MOCK_AGENTS=1
+ * - Tracks timeout vs other exit codes via didTimeout flag
  */
 export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
   if (process.env.NYAI_MOCK_AGENTS === '1') {
     return runMockAgent(opts);
   }
 
-  const { invocation, onStderrLine, abortSignal, timeoutMs = 600_000 } = opts;
+  const { invocation, onStderrLine, abortSignal, timeoutMs = 1_200_000 } = opts;
 
   const backend = getBackend(invocation.backend);
   const args = backend.buildArgs(invocation);
+  const startTime = Date.now();
 
   const proc = Bun.spawn([backend.command, ...args], {
     cwd: invocation.workingDir,
@@ -43,8 +46,13 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
     proc.stdin.end();
   }
 
-  // Stream stderr line-by-line
+  // Track whether we killed due to timeout
+  let didTimeout = false;
+
+  // Stream stderr line-by-line and accumulate
+  let stderrText = '';
   const stderrPromise = streamLines(proc.stderr, (line) => {
+    stderrText += line + '\n';
     onStderrLine?.(line);
   });
 
@@ -53,6 +61,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
 
   // Timeout handling
   const timeoutId = setTimeout(() => {
+    didTimeout = true;
     proc.kill('SIGTERM');
   }, timeoutMs);
 
@@ -68,23 +77,34 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
     clearTimeout(timeoutId);
 
     const exitCode = await proc.exited;
+    const durationMs = Date.now() - startTime;
 
-    const parsed = backend.parseOutput(invocation.role, stdout, exitCode);
+    // Detect timeout: either our flag or exit code 143 (SIGTERM)
+    const timedOut = didTimeout || exitCode === 143;
+
+    const parsed = backend.parseOutput(invocation.role, stdout, exitCode, stderrText);
+
     return {
       role: invocation.role,
       ...parsed,
+      durationMs: parsed.durationMs || durationMs,
+      timedOut,
+      partialOutput: timedOut ? stdout.trim() : undefined,
     };
   } catch (err) {
     clearTimeout(timeoutId);
+    const durationMs = Date.now() - startTime;
     return {
       role: invocation.role,
       success: false,
       output: '',
       costUsd: 0,
-      durationMs: 0,
+      durationMs,
       numTurns: 0,
       sessionId: '',
       error: `Agent process error: ${err}`,
+      timedOut: didTimeout,
+      partialOutput: didTimeout ? '' : undefined,
     };
   }
 }

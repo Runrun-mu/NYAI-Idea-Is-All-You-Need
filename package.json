@@ -1,6 +1,6 @@
 {
   "name": "nyai",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "NYAI — Idea Is All You Need — Autonomous AI Agent Orchestrator with immersive TUI",
   "type": "module",
   "main": "src/index.ts",

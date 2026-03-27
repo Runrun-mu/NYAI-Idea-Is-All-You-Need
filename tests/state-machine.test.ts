@@ -60,10 +60,40 @@ describe('canTransition', () => {
   });
 
   test('any state → ERROR is valid (except DONE/ERROR)', () => {
-    const statesWithError: State[] = ['ARCHITECTING', 'PLANNING', 'CONTRACTING', 'GENERATING', 'EVALUATING', 'BLOCKED'];
+    const statesWithError: State[] = ['ARCHITECTING', 'PLANNING', 'CONTRACTING', 'GENERATING', 'EVALUATING', 'REPLANNING', 'BLOCKED'];
     for (const s of statesWithError) {
       expect(canTransition(s, 'ERROR')).toBe(true);
     }
+  });
+
+  // ─── REPLANNING transitions (v0.2.1) ──────────────────────────
+
+  test('GENERATING → REPLANNING is valid', () => {
+    expect(canTransition('GENERATING', 'REPLANNING')).toBe(true);
+  });
+
+  test('EVALUATING → REPLANNING is valid', () => {
+    expect(canTransition('EVALUATING', 'REPLANNING')).toBe(true);
+  });
+
+  test('REPLANNING → GENERATING is valid', () => {
+    expect(canTransition('REPLANNING', 'GENERATING')).toBe(true);
+  });
+
+  test('REPLANNING → DONE is valid', () => {
+    expect(canTransition('REPLANNING', 'DONE')).toBe(true);
+  });
+
+  test('REPLANNING → ERROR is valid', () => {
+    expect(canTransition('REPLANNING', 'ERROR')).toBe(true);
+  });
+
+  test('REPLANNING → PLANNING is invalid', () => {
+    expect(canTransition('REPLANNING', 'PLANNING')).toBe(false);
+  });
+
+  test('IDLE → REPLANNING is invalid', () => {
+    expect(canTransition('IDLE', 'REPLANNING')).toBe(false);
   });
 });
 

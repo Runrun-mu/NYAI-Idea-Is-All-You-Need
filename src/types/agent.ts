@@ -35,4 +35,7 @@ export interface AgentResult {
   numTurns: number;
   sessionId: string;
   error?: string;
+  timedOut?: boolean;
+  partialOutput?: string;
+  timeoutRetryCount?: number;
 }

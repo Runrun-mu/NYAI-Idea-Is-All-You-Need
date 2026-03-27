@@ -28,7 +28,8 @@ export class CodexBackend implements BackendAdapter {
   parseOutput(
     role: AgentInvocation['role'],
     stdout: string,
-    exitCode: number
+    exitCode: number,
+    _stderr?: string
   ) {
     // Codex outputs plain text, no structured JSON
     return {

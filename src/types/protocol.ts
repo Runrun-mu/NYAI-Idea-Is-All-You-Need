@@ -11,6 +11,18 @@ export interface EvalReport {
   suggestions: string[];
   score?: number;
   regressions?: RegressionInfo[];
+  testResults?: {
+    ran: boolean;
+    total: number;
+    passed: number;
+    failed: number;
+    skipped: number;
+    details: TestPlanResult[];
+    rawOutput?: string;
+  };
+  timeoutRecommendation?: 'continue' | 'abort' | 'simplify';
+  estimatedAdditionalTimeMs?: number;
+  timeoutReason?: string;
 }
 
 export interface FailedAc {
@@ -60,6 +72,13 @@ export interface ArchitectureRecord {
   ciCd?: string;
   decisions: string[];
   notes?: string;
+  testInfra?: {
+    unitRunner?: string;     // "vitest" | "bun:test" | "jest"
+    unitCommand?: string;    // "npx vitest run" | "bun test"
+    e2eCommand?: string;     // "bash scripts/e2e-test.sh"
+    devServerCommand?: string; // "bun run dev"
+    devServerPort?: number;    // 3000
+  };
 }
 
 // ─── Feature List (F5) ────────────────────────────────────────────
@@ -81,4 +100,45 @@ export interface FeatureList {
   features: FeatureItem[];
   createdAt: number;
   updatedAt: number;
+}
+
+// ─── Test Plan (v0.5) ────────────────────────────────────────────
+
+export interface TestPlan {
+  sprintId: string;
+  testCases: TestCase[];
+}
+
+export interface TestCase {
+  id: string;            // "TC-1"
+  acId: string;          // "AC-1"
+  title: string;         // "角色选择页渲染全部6个角色"
+  type: 'unit' | 'integration' | 'e2e';
+  steps: TestStep[];
+  expectedResult: string;
+  automatable: boolean;
+}
+
+export interface TestStep {
+  action: string;
+  expected: string;
+  command?: string;      // 可执行的验证命令
+}
+
+export interface TestPlanResult {
+  testCaseId: string;
+  acId: string;
+  status: 'PASS' | 'FAIL' | 'SKIP' | 'ERROR';
+  output?: string;
+}
+
+// ─── Timeout Context (v0.2.1) ────────────────────────────────────
+
+export interface TimeoutContext {
+  round: number;
+  durationMs: number;
+  partialOutput: string;
+  filesModified: string[];
+  retryCount: number;
+  totalTimeSpentMs: number;
 }

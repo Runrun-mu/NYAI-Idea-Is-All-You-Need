@@ -18,7 +18,8 @@ export interface BackendAdapter {
   parseOutput(
     role: AgentInvocation['role'],
     stdout: string,
-    exitCode: number
+    exitCode: number,
+    stderr?: string
   ): {
     success: boolean;
     output: string;

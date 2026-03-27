@@ -1,6 +1,6 @@
 import type { AgentInvocation } from '../types/agent';
 import type { NYAIConfig } from '../types/config';
-import type { RegressionInfo } from '../types/protocol';
+import type { RegressionInfo, TestPlan } from '../types/protocol';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
@@ -12,7 +12,9 @@ export function buildGeneratorInvocation(
   round: number,
   previousEvalFeedback?: string,
   previouslyPassedAcs?: string[],
-  regressions?: RegressionInfo[]
+  regressions?: RegressionInfo[],
+  memoryContext?: string,
+  testPlan?: TestPlan
 ): AgentInvocation {
   let systemPrompt: string;
   try {
@@ -55,6 +57,27 @@ For each AC, write the test BEFORE the implementation.
 The Evaluator will verify that test files exist and are runnable.`;
   }
 
+  // Test Plan consumption (v0.5)
+  if (testPlan && testPlan.testCases.length > 0) {
+    prompt += `
+
+## 📋 TEST PLAN — Implement These Specific Test Cases
+A Test Plan with ${testPlan.testCases.length} test case(s) exists at:
+\`${harnessDir}/test-plans/${sprintId}.json\`
+
+Read this file and implement each test case. For each TestCase:
+1. **Write the test first** — create a test file that verifies the expected behavior
+2. **Run the test** — confirm it fails (red phase)
+3. **Write the implementation** — make the test pass (green phase)
+4. **Verify** — run the test again to confirm it passes
+
+Here is a summary of the test cases:
+${testPlan.testCases.map((tc) => `- **${tc.id}** (${tc.acId}): ${tc.title} [${tc.type}]${tc.automatable ? '' : ' (manual only)'}`).join('\n')}
+
+**IMPORTANT**: These are CONCRETE test cases, not suggestions. Implement them as specified.
+The Evaluator will run the verification commands from the test plan to check your work.`;
+  }
+
   // Regression protection
   if (previouslyPassedAcs && previouslyPassedAcs.length > 0) {
     prompt += `
@@ -89,6 +112,11 @@ The Evaluator found issues in the previous round. Fix them:
 ${previousEvalFeedback}
 
 Focus on fixing the FAILED acceptance criteria first.`;
+  }
+
+  // Memory context injection (round 1 only)
+  if (round === 1 && memoryContext) {
+    prompt += `\n${memoryContext}`;
   }
 
   return {

@@ -17,7 +17,14 @@ export type OrchestratorEvent =
   | DoneEvent
   | ArchitectDoneEvent
   | FeatureProgressEvent
-  | RegressionDetectedEvent;
+  | RegressionDetectedEvent
+  | AgentTimeoutEvent
+  | PlannerReplanEvent
+  | ParallelBatchEvent
+  | RetrospectiveDoneEvent
+  | BacklogPickedEvent
+  | BacklogDoneEvent
+  | SprintResumedEvent;
 
 export interface StateChangeEvent {
   type: 'state:change';
@@ -110,5 +117,60 @@ export interface RegressionDetectedEvent {
   type: 'eval:regression';
   regressions: RegressionInfo[];
   round: number;
+  timestamp: number;
+}
+
+// ─── New Events (v0.2.1) ───────────────────────────────────────────
+
+export interface AgentTimeoutEvent {
+  type: 'agent:timeout';
+  role: AgentRole;
+  round: number;
+  retryCount: number;
+  durationMs: number;
+  filesModified: string[];
+  timestamp: number;
+}
+
+export interface PlannerReplanEvent {
+  type: 'planner:replan';
+  reason: string;
+  originalFeature: string;
+  timestamp: number;
+}
+
+export interface ParallelBatchEvent {
+  type: 'parallel:batch';
+  generatorCount: number;
+  assignments: string[][];
+  timestamp: number;
+}
+
+// ─── New Events (v0.3) ───────────────────────────────────────────
+
+export interface RetrospectiveDoneEvent {
+  type: 'retrospective:done';
+  sprintId: string;
+  timestamp: number;
+}
+
+export interface BacklogPickedEvent {
+  type: 'backlog:picked';
+  itemId: string;
+  title: string;
+  timestamp: number;
+}
+
+export interface BacklogDoneEvent {
+  type: 'backlog:done';
+  itemId: string;
+  timestamp: number;
+}
+
+export interface SprintResumedEvent {
+  type: 'sprint:resumed';
+  sprintId: string;
+  fromState: State;
+  fromRound: number;
   timestamp: number;
 }

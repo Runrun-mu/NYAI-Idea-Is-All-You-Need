@@ -7,6 +7,7 @@ export type State =
   | 'CONTRACTING'
   | 'GENERATING'
   | 'EVALUATING'
+  | 'REPLANNING'
   | 'BLOCKED'
   | 'DONE'
   | 'ERROR';
@@ -36,6 +37,8 @@ export interface OrchestratorState {
   currentFeatureIndex?: number;
   totalFeatures?: number;
   previouslyPassedAcs: string[];
+  timeoutRetryCount: number;
+  totalGeneratorTimeMs: number;
 }
 
 // ─── Pending Decision ──────────────────────────────────────────────

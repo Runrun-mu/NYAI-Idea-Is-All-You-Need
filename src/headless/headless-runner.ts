@@ -88,6 +88,45 @@ export function runHeadless(orchestrator: Orchestrator): void {
           console.log(`[${ts}]   🔙 ${r.acId}: was PASS, now FAIL`);
         }
         break;
+
+      case 'agent:timeout':
+        console.log(
+          `[${ts}] ⏰ Agent ${event.role} timed out (round ${event.round}, retry #${event.retryCount}, ${Math.round(event.durationMs / 1000)}s)`
+        );
+        if (event.filesModified.length > 0) {
+          console.log(`[${ts}]   Modified files: ${event.filesModified.join(', ')}`);
+        }
+        break;
+
+      case 'planner:replan':
+        console.log(`[${ts}] 🔄 Replanning: ${event.reason}`);
+        console.log(`[${ts}]   Original feature: ${event.originalFeature.slice(0, 100)}...`);
+        break;
+
+      case 'parallel:batch':
+        console.log(`[${ts}] 🔀 Parallel batch: ${event.generatorCount} generators`);
+        for (let i = 0; i < event.assignments.length; i++) {
+          console.log(`[${ts}]   Generator ${i + 1}: ${event.assignments[i].join(', ')}`);
+        }
+        break;
+
+      // ─── New Events (v0.3) ──────────────────────────────────────
+
+      case 'retrospective:done':
+        console.log(`[${ts}] 🧠 Retrospective saved for ${event.sprintId}`);
+        break;
+
+      case 'backlog:picked':
+        console.log(`[${ts}] 📋 Backlog item picked: [${event.itemId}] ${event.title}`);
+        break;
+
+      case 'backlog:done':
+        console.log(`[${ts}] ✅ Backlog item completed: ${event.itemId}`);
+        break;
+
+      case 'sprint:resumed':
+        console.log(`[${ts}] ▶️  Sprint resumed: ${event.sprintId} from ${event.fromState} (round ${event.fromRound})`);
+        break;
     }
   });
 }

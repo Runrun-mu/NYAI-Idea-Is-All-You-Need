@@ -1,4 +1,4 @@
-import type { EvalReport, EvalVerdict, FeatureSpec, SprintContract } from '../types/protocol';
+import type { EvalReport, EvalVerdict, FeatureSpec, SprintContract, TestPlan } from '../types/protocol';
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
 
@@ -6,7 +6,7 @@ import { join, dirname } from 'path';
 
 export function ensureHarnessDir(rootDir: string): string {
   const harnessDir = join(rootDir, '.harness');
-  const dirs = ['specs', 'contracts', 'reports'];
+  const dirs = ['specs', 'contracts', 'reports', 'test-plans'];
   for (const d of dirs) {
     const p = join(harnessDir, d);
     if (!existsSync(p)) mkdirSync(p, { recursive: true });
@@ -155,4 +155,19 @@ export function isStuck(failedAcIds: string[], previousFailedAcIds: string[]): b
     if (!prevSet.has(id)) return false;
   }
   return true;
+}
+
+// ─── Test Plan (v0.5) ────────────────────────────────────────────
+
+export function getTestPlanPath(harnessDir: string, sprintId: string): string {
+  return join(harnessDir, 'test-plans', `${sprintId}.json`);
+}
+
+export function readTestPlan(harnessDir: string, sprintId: string): TestPlan | null {
+  try {
+    const raw = readFileSync(getTestPlanPath(harnessDir, sprintId), 'utf-8');
+    return JSON.parse(raw) as TestPlan;
+  } catch {
+    return null;
+  }
 }
