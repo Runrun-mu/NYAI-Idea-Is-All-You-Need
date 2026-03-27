@@ -42,6 +42,8 @@ const initialAgentStatuses: Record<AgentRole, AgentStatus> = {
   planner: { status: 'idle' },
   generator: { status: 'idle' },
   evaluator: { status: 'idle' },
+  deployer: { status: 'idle' },
+  reporter: { status: 'idle' },
 };
 
 export function useOrchestrator(orchestrator: Orchestrator): OrchestratorUIState {

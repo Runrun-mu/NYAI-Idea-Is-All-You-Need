@@ -13,10 +13,12 @@ const AGENT_LABELS: Record<AgentRole, { emoji: string; name: string }> = {
   planner: { emoji: '📋', name: 'Planner' },
   generator: { emoji: '⚡', name: 'Generator' },
   evaluator: { emoji: '🔍', name: 'Evaluator' },
+  deployer: { emoji: '🚀', name: 'Deployer' },
+  reporter: { emoji: '📊', name: 'Reporter' },
 };
 
 export function AgentPanel({ agentStatuses, currentAgent }: AgentPanelProps) {
-  const roles: AgentRole[] = ['architect', 'planner', 'generator', 'evaluator'];
+  const roles: AgentRole[] = ['architect', 'planner', 'generator', 'evaluator', 'deployer', 'reporter'];
 
   return (
     <Box flexDirection="column" width={28} borderStyle="round" borderColor="cyan" paddingX={1}>

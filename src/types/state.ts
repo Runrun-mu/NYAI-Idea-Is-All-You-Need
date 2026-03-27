@@ -11,6 +11,7 @@ export type State =
   | 'REPLANNING'
   | 'CHECKPOINT'         // v0.6: Post-feature checkpoint + critical-path regression
   | 'GOAL_ACCEPTANCE'    // v0.6: Final goal-level acceptance after all features
+  | 'DEPLOYING'          // v0.4: Deployer running
   | 'BLOCKED'
   | 'DONE'
   | 'ERROR';

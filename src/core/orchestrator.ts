@@ -12,6 +12,9 @@ import { buildPlannerInvocation, buildReplanInvocation, type TimeoutHistory } fr
 import { buildGeneratorInvocation } from '../agents/generator';
 import { buildEvaluatorInvocation, buildReviewInvocation, buildGoalAcceptanceInvocation } from '../agents/evaluator';
 import { buildArchitectInvocation } from '../agents/architect';
+import { buildDeployerInvocation } from '../agents/deployer';
+import { buildReporterInvocation } from '../agents/reporter';
+import { readDeployment } from '../protocol/deployment-store';
 import { isTimeoutResult, snapshotGitHead, buildTimeoutContext } from '../agents/timeout-handler';
 import { splitWork, runParallelGenerators, mergeParallelResults } from '../agents/parallel-generator';
 import {
@@ -214,6 +217,82 @@ export class Orchestrator extends EventEmitter {
       this.memoryContextStr = ctx ? formatMemoryForPrompt(ctx) : null;
     } catch {
       this.memoryContextStr = null;
+    }
+  }
+
+  // ─── Deployer (v0.4) ───────────────────────────────────────────
+
+  private async runDeployer(sprintId: string): Promise<void> {
+    try {
+      await this.transitionTo('DEPLOYING', 'Starting deployment');
+      this.state.currentAgent = 'deployer';
+
+      const invocation = buildDeployerInvocation(this.config, sprintId);
+      const result = await runAgent({
+        invocation,
+        onStderrLine: (line: string) => {
+          this.emitEvent({ type: 'agent:log', role: 'deployer', line, timestamp: Date.now() });
+        },
+        abortSignal: this.abortController.signal,
+      });
+
+      this.costTracker.add(result.costUsd);
+
+      const deployment = readDeployment(this.harnessDir);
+      if (deployment) {
+        this.emitEvent({
+          type: 'deployer:done',
+          deployment,
+          timestamp: Date.now(),
+        });
+        appendProgress(this.harnessDir, 'deployer', `Deployment: ${deployment.status} → ${deployment.url ?? 'no URL'}`);
+      }
+
+      this.state.currentAgent = null;
+    } catch (err) {
+      this.state.currentAgent = null;
+      appendProgress(this.harnessDir, 'deployer', `Deployer error: ${(err as Error).message}`);
+    }
+  }
+
+  // ─── Reporter (v0.4) ──────────────────────────────────────────
+
+  private async runReporter(sprintId: string): Promise<void> {
+    try {
+      const invocation = buildReporterInvocation(this.config, sprintId);
+      this.state.currentAgent = 'reporter';
+
+      const result = await runAgent({
+        invocation,
+        onStderrLine: (line: string) => {
+          this.emitEvent({ type: 'agent:log', role: 'reporter', line, timestamp: Date.now() });
+        },
+        abortSignal: this.abortController.signal,
+      });
+
+      this.costTracker.add(result.costUsd);
+
+      // Find the generated report file
+      const reportsDir = `${this.harnessDir}/reports`;
+      try {
+        const { readdirSync } = await import('fs');
+        const htmlReports = readdirSync(reportsDir).filter((f: string) => f.startsWith('progress-') && f.endsWith('.html'));
+        if (htmlReports.length > 0) {
+          const latestReport = htmlReports.sort().pop()!;
+          this.emitEvent({
+            type: 'reporter:done',
+            reportPath: `${reportsDir}/${latestReport}`,
+            timestamp: Date.now(),
+          });
+        }
+      } catch {
+        // reports dir may not exist
+      }
+
+      this.state.currentAgent = null;
+    } catch (err) {
+      this.state.currentAgent = null;
+      appendProgress(this.harnessDir, 'reporter', `Reporter error: ${(err as Error).message}`);
     }
   }
 
@@ -444,11 +523,18 @@ export class Orchestrator extends EventEmitter {
     const goalPassed = await this.runGoalAcceptance(sprintId, featureList);
 
     if (goalPassed) {
+      // v0.4: Deploy if enabled
+      if (this.config.deploy?.enabled) {
+        await this.runDeployer(sprintId);
+      }
       await this.transitionTo('DONE', 'Goal acceptance PASS — all features verified');
     } else {
       // Goal acceptance failed even after retries — finish with what we have
       await this.transitionTo('DONE', 'Goal acceptance did not fully pass, finishing with current state');
     }
+
+    // v0.4: Generate progress report (async, non-blocking)
+    await this.runReporter(sprintId);
 
     await this.generateRetrospective();
     this.markBacklogDone();

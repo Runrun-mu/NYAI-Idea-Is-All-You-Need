@@ -1,6 +1,7 @@
 import type { AgentRole, AgentResult } from './agent';
 import type { State, PendingDecision } from './state';
 import type { EvalVerdict, EvalReport, ArchitectureRecord, RegressionInfo, CheckpointReport, Issue } from './protocol';
+import type { DeploymentRecord } from '../protocol/deployment-store';
 
 // ─── Tagged Union of all Orchestrator Events ───────────────────────
 
@@ -27,7 +28,9 @@ export type OrchestratorEvent =
   | SprintResumedEvent
   | CheckpointReadyEvent        // v0.6
   | GoalAcceptanceEvent         // v0.6
-  | IssueRaisedEvent;           // v0.6
+  | IssueRaisedEvent           // v0.6
+  | DeployerDoneEvent          // v0.4
+  | ReporterDoneEvent;         // v0.4
 
 export interface StateChangeEvent {
   type: 'state:change';
@@ -198,5 +201,19 @@ export interface GoalAcceptanceEvent {
 export interface IssueRaisedEvent {
   type: 'issue:raised';
   issue: Issue;
+  timestamp: number;
+}
+
+// ─── New Events (v0.4 — Deployer & Reporter) ─────────────────────
+
+export interface DeployerDoneEvent {
+  type: 'deployer:done';
+  deployment: DeploymentRecord;
+  timestamp: number;
+}
+
+export interface ReporterDoneEvent {
+  type: 'reporter:done';
+  reportPath: string;
   timestamp: number;
 }

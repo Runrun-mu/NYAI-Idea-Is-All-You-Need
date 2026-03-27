@@ -92,6 +92,7 @@ program
   .option('--no-test-first', 'Disable test-first mode')
   .option('--decompose', 'Enable task decomposition into features')
   .option('--git-auto-commit', 'Auto-commit after each eval round')
+  .option('--deploy', 'Deploy to Vercel after successful build')
   .option('--generator-timeout <ms>', 'Generator timeout in ms (default: 1200000)', parseInt)
   .option('--evaluator-timeout <ms>', 'Evaluator timeout in ms (default: 900000)', parseInt)
   .option('--parallel-generators <n>', 'Number of parallel generators (default: 1)', parseInt)
@@ -107,6 +108,7 @@ program
     testFirst?: boolean;
     decompose?: boolean;
     gitAutoCommit?: boolean;
+    deploy?: boolean;
     generatorTimeout?: number;
     evaluatorTimeout?: number;
     parallelGenerators?: number;
@@ -123,6 +125,7 @@ program
     if (opts.testFirst === false) config.testFirst = false;
     if (opts.decompose) config.taskDecomposition = true;
     if (opts.gitAutoCommit) config.gitAutoCommit = true;
+    if (opts.deploy) config.deploy = { enabled: true, target: 'vercel' };
     if (opts.generatorTimeout !== undefined) config.budget.generatorTimeoutMs = opts.generatorTimeout;
     if (opts.evaluatorTimeout !== undefined) config.budget.evaluatorTimeoutMs = opts.evaluatorTimeout;
     if (opts.parallelGenerators !== undefined) config.parallelGenerators = opts.parallelGenerators;

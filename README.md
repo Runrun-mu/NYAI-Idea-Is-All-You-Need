@@ -6,7 +6,7 @@
 
 **Autonomous AI Agent Orchestrator with Immersive TUI**
 
-三个 AI Agent 自主协作，把你的一句话需求变成可运行的代码。
+六个 AI Agent 自主协作，把你的一句话需求变成可运行的代码并部署上线。
 
 [![Bun](https://img.shields.io/badge/runtime-Bun_1.3-f9a825?style=flat-square&logo=bun)](https://bun.sh)
 [![TypeScript](https://img.shields.io/badge/lang-TypeScript-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
@@ -25,7 +25,10 @@
 
 <img src="https://img.shields.io/badge/Planner-产品经理-blue?style=for-the-badge" /> &nbsp;
 <img src="https://img.shields.io/badge/Generator-全栈工程师-green?style=for-the-badge" /> &nbsp;
-<img src="https://img.shields.io/badge/Evaluator-QA工程师-orange?style=for-the-badge" />
+<img src="https://img.shields.io/badge/Evaluator-QA工程师-orange?style=for-the-badge" /> &nbsp;
+<img src="https://img.shields.io/badge/Architect-架构师-purple?style=for-the-badge" /> &nbsp;
+<img src="https://img.shields.io/badge/Deployer-运维-red?style=for-the-badge" /> &nbsp;
+<img src="https://img.shields.io/badge/Reporter-报告-cyan?style=for-the-badge" />
 
 </div>
 
@@ -33,13 +36,16 @@
 
 ## ✨ What is NYAI?
 
-NYAI 是一个 **自主 AI 编排引擎**——你只需提供一句话需求，它会自动驱动三个专业 AI Agent 协作完成开发：
+NYAI 是一个 **自主 AI 编排引擎**——你只需提供一句话需求，它会自动驱动六个专业 AI Agent 协作完成开发：
 
 | Agent | 角色 | 职责 |
 |:---:|:---:|:---|
-| 📋 **Planner** | 产品经理 / Tech Lead | 分析需求 → 输出 Feature Spec + 验收标准 |
-| ⚡ **Generator** | 全栈工程师 | 读取 Spec → 编写完整代码实现 |
-| 🔍 **Evaluator** | QA 工程师 | 逐条检查验收标准 → 输出评估报告 |
+| 🏗️ **Architect** | 架构师 | 分析项目需求 → 确定技术栈 → 搭建脚手架 |
+| 📋 **Planner** | 产品经理 / Tech Lead | 分析需求 → 输出 Feature Spec + 验收标准 + Test Plan |
+| ⚡ **Generator** | 全栈工程师 | 读取 Spec → 编写完整代码实现（支持并行） |
+| 🔍 **Evaluator** | QA 工程师 | 逐条检查验收标准 → 跑测试 → 输出评估报告 |
+| 🚀 **Deployer** | DevOps 工程师 | 配置部署 → 自动部署到 Vercel → 记录部署历史 |
+| 📊 **Reporter** | 技术文档 | 读取进度数据 → 生成可视化 HTML 报告 |
 
 如果评估不通过，Generator 会根据反馈自动修复，循环直到通过——**像一个自运转的开发团队**。
 
@@ -172,6 +178,8 @@ bun run src/index.ts decisions
 | `nyai init [name]` | 初始化 `.harness/` 配置目录 |
 | `nyai run "<prompt>"` | TUI 模式运行 |
 | `nyai run --headless "<prompt>"` | 无 UI 模式运行 |
+| `nyai run --deploy "<prompt>"` | 构建完成后自动部署到 Vercel |
+| `nyai run --decompose "<prompt>"` | 自动拆分多个 Feature |
 | `nyai status` | 查看当前状态 |
 | `nyai report` | 查看最新评估报告 |
 | `nyai decisions` | 查看自治决策日志 |

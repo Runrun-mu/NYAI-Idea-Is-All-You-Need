@@ -20,6 +20,8 @@ export interface NYAIConfig {
     generator: AgentConfig;
     evaluator: AgentConfig;
     architect?: AgentConfig;
+    deployer?: AgentConfig;
+    reporter?: AgentConfig;
   };
   notification?: NotificationConfig;
   autonomy: {
@@ -31,6 +33,11 @@ export interface NYAIConfig {
   testFirst?: boolean;
   taskDecomposition?: boolean;
   gitAutoCommit?: boolean;
+  deploy?: {
+    enabled: boolean;
+    target: 'vercel' | 'custom';
+    customCommand?: string;
+  };
   testing?: {
     requireTestPlan?: boolean;       // default true
     requireTestExecution?: boolean;  // default true

@@ -1,4 +1,4 @@
-export type AgentRole = 'planner' | 'generator' | 'evaluator' | 'architect';
+export type AgentRole = 'planner' | 'generator' | 'evaluator' | 'architect' | 'deployer' | 'reporter';
 
 export type BackendType = 'claude' | 'codex' | 'opencode';
 
