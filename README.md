@@ -42,6 +42,20 @@ NYAI 是一个 **自主 AI 编排引擎**——你只需提供一句话需求，
 
 如果评估不通过，Generator 会根据反馈自动修复，循环直到通过——**像一个自运转的开发团队**。
 
+### 🆕 v0.6 — Goal-Driven Convergence
+
+v0.6 加入了**目标驱动收敛机制**，确保最终产品真正可用，而不只是单个 Feature 各自通过：
+
+| 机制 | 说明 |
+|:---:|:---|
+| 🎯 **Critical Path** | Planner 输出主流程验收场景（冒烟测试），每个 Feature 完成后自动回归 |
+| 📋 **Evaluator Review** | 生成前 Evaluator 先审阅 Planner 的验收标准，补充遗漏 |
+| 🔁 **Cross-Feature Regression** | `previouslyPassedAcs` 跨 Feature 传递，防止后面的 Feature 把前面的改坏 |
+| 📊 **Checkpoint 汇报** | 每个 Feature 完成后输出结构化报告，带 artifacts（截图/HTML 快照/测试输出） |
+| ✅ **Goal Acceptance** | 所有 Feature 完成后，对标用户原始目标做最终验收 |
+| 🔄 **Incremental Replan** | Goal Acceptance 失败 → Planner 只补缺失部分，不重做 |
+| 🚨 **P0-P4 Issue Severity** | 问题分 5 级，P0/P1 自动升级给人决策，P2+ 自动处理 |
+
 ## 🏗 Architecture
 
 ```
@@ -59,13 +73,15 @@ NYAI 是一个 **自主 AI 编排引擎**——你只需提供一句话需求，
                     │                        │                      │
                     ▼                        ▼                      ▼
              Feature Spec              Code Files             Eval Report
-             Sprint Contract        (直接写入项目)         (PASS/FAIL/PARTIAL)
+             Critical Path 🆕      (直接写入项目)         (PASS/FAIL/PARTIAL)
+             Sprint Contract                                 Review 🆕
                     │                        │                      │
                     └────────────────────────┼──────────────────────┘
                                              │
                                     ┌────────▼────────┐
                                     │   FAIL? → 重试   │
-                                    │   PASS? → 完成!  │
+                                    │   PASS? → 检查点 🆕│
+                                    │   ALL? → 目标验收🆕│
                                     └─────────────────┘
 ```
 
@@ -200,7 +216,7 @@ NYAI/
 ## 🧪 Testing
 
 ```bash
-# 运行全部测试（32 个）
+# 运行全部测试（212 个）
 bun test
 
 # Mock 模式全流程测试
@@ -264,6 +280,29 @@ autonomy:
 | 运行时 | Bun | 原生 TS、快速启动、内置测试 |
 | 状态机 | 纯函数 | 无副作用，100% 可测试 |
 | Mock 模式 | `NYAI_MOCK_AGENTS=1` | 开发/测试零 API 成本 |
+
+## 🎯 v0.6 State Machine
+
+```
+IDLE → ARCHITECTING → PLANNING → REVIEWING → CONTRACTING → GENERATING ↔ EVALUATING
+                                                                ↓              ↓
+                                                           REPLANNING    CHECKPOINT
+                                                                            ↓
+                                                                    GOAL_ACCEPTANCE
+                                                                      ↓         ↓
+                                                                    DONE    PLANNING (增量修复)
+                                                                              ↓
+                                                                           BLOCKED (P0/P1 升级)
+```
+
+### 完整生命周期
+
+1. **PLANNING** — Planner 输出 Spec + TestPlan + CriticalPath
+2. **REVIEWING** — Evaluator 审阅 CriticalPath，补充遗漏
+3. **GENERATING ↔ EVALUATING** — 代码生成 + 验收循环（每个 Feature）
+4. **CHECKPOINT** — 每个 Feature PASS 后，跑 CriticalPath 回归
+5. **GOAL_ACCEPTANCE** — 所有 Feature 完成后，最终产品验收
+6. **DONE** 或 **增量修复** — Goal PASS → 完成；FAIL → Planner 补缺失部分
 
 ## 📄 License
 

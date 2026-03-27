@@ -887,6 +887,41 @@
             <p>开发测试零 API 成本</p>
           </div>
         </div>
+
+        <!-- v0.6 Goal-Driven Features -->
+        <h2 class="section-title" style="margin-top:64px;">v0.6 — Goal-Driven Convergence</h2>
+        <div class="features-grid">
+          <div class="feature-card">
+            <div class="feature-icon">🎯</div>
+            <h3>Critical Path</h3>
+            <p>Planner 输出主流程验收场景，每个 Feature 完成后自动回归</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">📋</div>
+            <h3>Evaluator Review</h3>
+            <p>生成前 Evaluator 先审阅验收标准，Planner + QA 对齐</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">🔁</div>
+            <h3>跨 Feature 回归</h3>
+            <p>previouslyPassedACs 跨 Feature 传递，防止后面改坏前面</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">📊</div>
+            <h3>Checkpoint 汇报</h3>
+            <p>每个 Feature 完成后输出结构化报告，带 artifacts</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">✅</div>
+            <h3>Goal Acceptance</h3>
+            <p>所有 Feature 完成后，对标用户原始目标做最终验收</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">🚨</div>
+            <h3>P0-P4 Issue Severity</h3>
+            <p>问题分 5 级，P0/P1 自动升级给人决策，P2+ 自动处理</p>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -916,6 +951,9 @@
         </div>
         <div class="retry-note">
           <span>↻ 如果评估不通过 → 自动重试修复，直到通过</span>
+        </div>
+        <div class="retry-note" style="margin-top:12px;">
+          <span>🆕 v0.6: Feature PASS → Checkpoint 回归 → 所有 Feature 完成 → Goal Acceptance → DONE</span>
         </div>
       </div>
     </section>

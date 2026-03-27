@@ -6,7 +6,7 @@ import { join, dirname } from 'path';
 
 export function ensureHarnessDir(rootDir: string): string {
   const harnessDir = join(rootDir, '.harness');
-  const dirs = ['specs', 'contracts', 'reports', 'test-plans'];
+  const dirs = ['specs', 'contracts', 'reports', 'test-plans', 'critical-path', 'checkpoints', 'checkpoints/artifacts'];
   for (const d of dirs) {
     const p = join(harnessDir, d);
     if (!existsSync(p)) mkdirSync(p, { recursive: true });

@@ -1,6 +1,6 @@
 import type { AgentRole, AgentResult } from './agent';
 import type { State, PendingDecision } from './state';
-import type { EvalVerdict, EvalReport, ArchitectureRecord, RegressionInfo } from './protocol';
+import type { EvalVerdict, EvalReport, ArchitectureRecord, RegressionInfo, CheckpointReport, Issue } from './protocol';
 
 // ─── Tagged Union of all Orchestrator Events ───────────────────────
 
@@ -24,7 +24,10 @@ export type OrchestratorEvent =
   | RetrospectiveDoneEvent
   | BacklogPickedEvent
   | BacklogDoneEvent
-  | SprintResumedEvent;
+  | SprintResumedEvent
+  | CheckpointReadyEvent        // v0.6
+  | GoalAcceptanceEvent         // v0.6
+  | IssueRaisedEvent;           // v0.6
 
 export interface StateChangeEvent {
   type: 'state:change';
@@ -172,5 +175,28 @@ export interface SprintResumedEvent {
   sprintId: string;
   fromState: State;
   fromRound: number;
+  timestamp: number;
+}
+
+// ─── New Events (v0.6 — Goal-Driven) ───────────────────────────────
+
+export interface CheckpointReadyEvent {
+  type: 'checkpoint:ready';
+  checkpoint: CheckpointReport;
+  timestamp: number;
+}
+
+export interface GoalAcceptanceEvent {
+  type: 'goal:acceptance';
+  verdict: 'PASS' | 'FAIL';
+  criticalPathStatus: 'PASS' | 'FAIL' | 'PARTIAL';
+  missingItems?: string[];
+  attempt: number;
+  timestamp: number;
+}
+
+export interface IssueRaisedEvent {
+  type: 'issue:raised';
+  issue: Issue;
   timestamp: number;
 }

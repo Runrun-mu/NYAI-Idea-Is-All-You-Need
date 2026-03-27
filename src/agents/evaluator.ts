@@ -1,6 +1,6 @@
 import type { AgentInvocation } from '../types/agent';
 import type { NYAIConfig } from '../types/config';
-import type { TimeoutContext, TestPlan, ArchitectureRecord } from '../types/protocol';
+import type { TimeoutContext, TestPlan, ArchitectureRecord, CriticalPath } from '../types/protocol';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
@@ -232,4 +232,146 @@ Your role is a **Senior QA Engineer**. Given a Feature Spec and implementation, 
 - Write your evaluation report as JSON to the path specified
 - Use Bash to run ALL tests — do not just read test files
 - Include raw test output in the testResults.rawOutput field`;
+}
+
+// ─── Review Invocation (v0.6) ────────────────────────────────────
+// Evaluator reviews the Planner's critical path and spec BEFORE generation starts.
+
+export function buildReviewInvocation(
+  config: NYAIConfig,
+  sprintId: string
+): AgentInvocation {
+  const harnessDir = join(config.project.rootDir, '.harness');
+
+  const prompt = `
+## Review Mode — Pre-Generation Quality Gate (v0.6)
+
+You are reviewing the Planner's outputs BEFORE any code is generated.
+Your job is to ensure the acceptance criteria and critical path are:
+1. **Complete** — no missing scenarios for the user's goal
+2. **Executable** — all verify commands are concrete and runnable
+3. **Realistic** — can be achieved within the sprint budget
+
+### Files to Review
+1. Feature Spec: \`${harnessDir}/specs/${sprintId}.md\`
+2. Sprint Contract: \`${harnessDir}/contracts/${sprintId}.md\`
+3. Test Plan: \`${harnessDir}/test-plans/${sprintId}.json\`
+4. Critical Path: \`${harnessDir}/critical-path/${sprintId}.json\`
+
+### Review Checklist
+- [ ] Every AC has at least one executable test case
+- [ ] Critical path covers the main user journey end-to-end
+- [ ] Critical path verify commands are concrete (not placeholder)
+- [ ] No critical scenarios are missing from the critical path
+- [ ] ACs are not too vague to verify
+
+### Output
+If amendments are needed, update the critical-path JSON file directly:
+- Add missing steps
+- Fix verify commands to be concrete
+- Set \`"reviewedByEvaluator": true\`
+- Add \`"evaluatorAmendments": ["description of change 1", ...]\`
+
+Write the updated critical path to: \`${harnessDir}/critical-path/${sprintId}.json\`
+
+If no changes needed, just read the file and set \`reviewedByEvaluator: true\`.
+
+Project root: ${config.project.rootDir}
+`.trim();
+
+  return {
+    role: 'evaluator',
+    systemPrompt: 'You are the Evaluator agent in review mode. Review the Planner\'s outputs for completeness and quality before generation begins.',
+    userPrompt: prompt,
+    allowedTools: config.agents.evaluator.allowedTools ?? ['Read', 'Glob', 'Grep', 'Bash', 'Write'],
+    disallowedTools: config.agents.evaluator.disallowedTools ?? ['Edit'],
+    maxTurns: config.agents.evaluator.maxTurns ?? 30,
+    workingDir: config.project.rootDir,
+    backend: config.agents.evaluator.backend ?? config.backend,
+    model: config.agents.evaluator.model,
+  };
+}
+
+// ─── Goal Acceptance / Critical Path Check Invocation (v0.6) ─────
+
+export function buildGoalAcceptanceInvocation(
+  config: NYAIConfig,
+  sprintId: string,
+  originalGoal: string,
+  criticalPath: CriticalPath,
+  completedFeatures: string[],
+  mode: 'checkpoint' | 'goal'
+): AgentInvocation {
+  const harnessDir = join(config.project.rootDir, '.harness');
+
+  const stepsText = criticalPath.steps.map((step) =>
+    `- ${step.id}: ${step.description}\n  Command: \`${step.verifyCommand ?? 'N/A'}\`\n  Expected: \`${step.expectedOutput ?? 'N/A'}\``
+  ).join('\n');
+
+  const prompt = `
+## ${mode === 'goal' ? 'Goal Acceptance' : 'Critical Path Checkpoint'} (v0.6)
+
+### Original User Goal
+${originalGoal}
+
+### Goal Summary
+${criticalPath.goalSummary}
+
+### Completed Features
+${completedFeatures.length > 0 ? completedFeatures.map((f) => `- ✅ ${f}`).join('\n') : '(none yet)'}
+
+### Critical Path Steps
+${stepsText}
+
+### Instructions
+1. **Run EVERY critical path step's verifyCommand** using Bash
+2. Compare actual output with expected output
+3. Record PASS/FAIL for each step
+4. ${mode === 'goal'
+    ? 'Determine if the overall product meets the user\'s original goal'
+    : 'Check if previously working features are still working (regression check)'}
+
+### Output
+Write a JSON report with this structure:
+\`\`\`json
+{
+  "goalVerdict": "PASS" | "FAIL",
+  "criticalPathStatus": "PASS" | "FAIL" | "PARTIAL",
+  "criticalPathResults": [
+    { "stepId": "CP-1", "status": "PASS" | "FAIL" | "SKIP", "actualOutput": "..." }
+  ],
+  "missingItems": ["description of what's missing or broken"],
+  "narrative": "Human-readable summary of the ${mode === 'goal' ? 'goal acceptance' : 'checkpoint'} result"
+}
+\`\`\`
+
+${mode === 'goal' ? `
+### Goal Acceptance Rules
+- **PASS**: ALL critical path steps pass AND the product visibly meets the user's goal
+- **FAIL**: ANY critical path step fails OR the product clearly doesn't meet the goal
+- Be STRICT — the user expects a working product, not just passing unit tests
+- If a dev server needs starting, start it, wait, then test
+` : `
+### Checkpoint Rules
+- Focus on regression detection — are previously passing features still working?
+- It's OK if the latest feature's steps aren't all passing yet
+- Report which steps regressed
+`}
+
+Write your report to: \`${harnessDir}/reports/${sprintId}-${mode}-${Date.now()}.json\`
+
+Project root: ${config.project.rootDir}
+`.trim();
+
+  return {
+    role: 'evaluator',
+    systemPrompt: `You are the Evaluator agent performing ${mode === 'goal' ? 'final goal acceptance' : 'a critical-path checkpoint'}. Run all verification commands and report results.`,
+    userPrompt: prompt,
+    allowedTools: config.agents.evaluator.allowedTools ?? ['Read', 'Glob', 'Grep', 'Bash', 'Write'],
+    disallowedTools: config.agents.evaluator.disallowedTools ?? ['Edit'],
+    maxTurns: config.agents.evaluator.maxTurns ?? 50,
+    workingDir: config.project.rootDir,
+    backend: config.agents.evaluator.backend ?? config.backend,
+    model: config.agents.evaluator.model,
+  };
 }

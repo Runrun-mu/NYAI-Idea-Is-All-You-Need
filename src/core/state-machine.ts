@@ -7,11 +7,14 @@ import type { State, StateHistoryEntry } from '../types/state';
 const TRANSITIONS: Record<State, State[]> = {
   IDLE: ['ARCHITECTING', 'PLANNING'],
   ARCHITECTING: ['PLANNING', 'ERROR'],
-  PLANNING: ['CONTRACTING', 'ERROR'],
+  PLANNING: ['REVIEWING', 'CONTRACTING', 'ERROR'],          // v0.6: can go to REVIEWING
+  REVIEWING: ['CONTRACTING', 'PLANNING', 'ERROR'],          // v0.6: review → contract or back to planning
   CONTRACTING: ['GENERATING', 'ERROR'],
   GENERATING: ['EVALUATING', 'REPLANNING', 'ERROR'],
-  EVALUATING: ['GENERATING', 'DONE', 'BLOCKED', 'REPLANNING', 'ERROR'],
+  EVALUATING: ['GENERATING', 'CHECKPOINT', 'DONE', 'BLOCKED', 'REPLANNING', 'ERROR'],  // v0.6: can go to CHECKPOINT
   REPLANNING: ['GENERATING', 'DONE', 'ERROR'],
+  CHECKPOINT: ['GENERATING', 'GOAL_ACCEPTANCE', 'DONE', 'ERROR'],  // v0.6: after checkpoint → next feature or goal acceptance
+  GOAL_ACCEPTANCE: ['PLANNING', 'DONE', 'BLOCKED', 'ERROR'],       // v0.6: goal acceptance → done, replan, or blocked
   BLOCKED: ['GENERATING', 'DONE', 'ERROR'],
   DONE: ['IDLE'],
   ERROR: ['IDLE'],

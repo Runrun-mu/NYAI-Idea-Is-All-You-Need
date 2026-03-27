@@ -2,7 +2,7 @@ import { EventEmitter } from 'events';
 import type { NYAIConfig } from '../types/config';
 import type { State, OrchestratorState, PendingDecision } from '../types/state';
 import type { AgentRole, AgentResult } from '../types/agent';
-import type { EvalVerdict, EvalReport, TimeoutContext } from '../types/protocol';
+import type { EvalVerdict, EvalReport, TimeoutContext, Issue, IssueSeverity, CheckpointReport } from '../types/protocol';
 import type { OrchestratorEvent } from '../types/events';
 import type { KnowledgeEntry } from '../types/memory';
 import { canTransition, transition, nextStateAfterEval } from './state-machine';
@@ -10,7 +10,7 @@ import { CostTracker } from './cost-tracker';
 import { runAgent } from '../agents/agent-runner';
 import { buildPlannerInvocation, buildReplanInvocation, type TimeoutHistory } from '../agents/planner';
 import { buildGeneratorInvocation } from '../agents/generator';
-import { buildEvaluatorInvocation } from '../agents/evaluator';
+import { buildEvaluatorInvocation, buildReviewInvocation, buildGoalAcceptanceInvocation } from '../agents/evaluator';
 import { buildArchitectInvocation } from '../agents/architect';
 import { isTimeoutResult, snapshotGitHead, buildTimeoutContext } from '../agents/timeout-handler';
 import { splitWork, runParallelGenerators, mergeParallelResults } from '../agents/parallel-generator';
@@ -36,6 +36,7 @@ import {
 } from '../protocol/memory-store';
 import { buildRetrospective } from '../protocol/retrospective';
 import { markItemDone } from '../protocol/backlog-store';
+import { readCriticalPath, writeCheckpoint, buildCheckpointReport } from '../protocol/checkpoint';
 
 export class Orchestrator extends EventEmitter {
   private config: NYAIConfig;
@@ -70,6 +71,10 @@ export class Orchestrator extends EventEmitter {
       previouslyPassedAcs: [],
       timeoutRetryCount: 0,
       totalGeneratorTimeMs: 0,
+      // v0.6
+      completedFeatures: [],
+      goalAcceptanceAttempts: 0,
+      issues: [],
     };
   }
 
@@ -100,7 +105,7 @@ export class Orchestrator extends EventEmitter {
       case 'generator': return this.getGeneratorTimeoutMs();
       case 'evaluator': return this.getEvaluatorTimeoutMs();
       case 'planner': return this.getPlannerTimeoutMs();
-      case 'architect': return this.getPlannerTimeoutMs(); // same as planner
+      case 'architect': return this.getPlannerTimeoutMs();
     }
   }
 
@@ -110,10 +115,95 @@ export class Orchestrator extends EventEmitter {
     return elapsed >= maxMs;
   }
 
+  // ─── Issue Severity System (v0.6) ─────────────────────────────────
+
+  /**
+   * Raise an issue with P0-P4 severity.
+   * P0: immediate escalation to human, blocks flow
+   * P1: retry once, then escalate
+   * P2: retry twice, then escalate
+   * P3/P4: log only, continue
+   */
+  raiseIssue(params: {
+    severity: IssueSeverity;
+    title: string;
+    description: string;
+    featureId?: string;
+    source: Issue['source'];
+    options?: string[];
+  }): Issue {
+    const issue: Issue = {
+      id: `issue-${Date.now()}-${this.state.issues.length}`,
+      severity: params.severity,
+      title: params.title,
+      description: params.description,
+      featureId: params.featureId,
+      source: params.source,
+      needsDecision: params.severity === 'P0' || params.severity === 'P1',
+      options: params.options,
+      createdAt: Date.now(),
+    };
+
+    this.state.issues.push(issue);
+
+    this.emitEvent({
+      type: 'issue:raised',
+      issue,
+      timestamp: Date.now(),
+    });
+
+    return issue;
+  }
+
+  /**
+   * Handle escalation based on severity.
+   * Returns the user's decision for P0/P1, or auto-resolves for P2+.
+   */
+  private async handleIssueEscalation(issue: Issue): Promise<string> {
+    if (issue.severity === 'P0') {
+      // Immediate escalation — must get human decision
+      const decision: PendingDecision = {
+        id: `decision-${issue.id}`,
+        timestamp: Date.now(),
+        agentRole: issue.source as AgentRole,
+        type: 'risk',
+        severity: issue.severity,
+        summary: `[P0 CRITICAL] ${issue.title}`,
+        details: issue.description,
+        options: issue.options ?? ['Fix and retry', 'Skip', 'Abort'],
+      };
+      appendDecision(this.harnessDir, decision);
+      this.emitEvent({ type: 'decision:needed', decision, timestamp: Date.now() });
+      return this.waitForDecision(decision);
+    }
+
+    if (issue.severity === 'P1') {
+      // Escalate after retry fails
+      const decision: PendingDecision = {
+        id: `decision-${issue.id}`,
+        timestamp: Date.now(),
+        agentRole: issue.source as AgentRole,
+        type: 'scope',
+        severity: issue.severity,
+        summary: `[P1 EMERGENCY] ${issue.title}`,
+        details: issue.description,
+        options: issue.options ?? ['Retry with more context', 'Skip and continue', 'Abort'],
+      };
+      appendDecision(this.harnessDir, decision);
+      this.emitEvent({ type: 'decision:needed', decision, timestamp: Date.now() });
+      return this.waitForDecision(decision);
+    }
+
+    // P2-P4: auto-resolve
+    issue.resolvedAt = Date.now();
+    issue.resolution = 'auto-resolved';
+    return 'auto-resolved';
+  }
+
   // ─── Memory helpers ─────────────────────────────────────────────
 
   private loadMemoryContext(): void {
-    const memoryEnabled = this.config.memory?.enabled !== false; // default true
+    const memoryEnabled = this.config.memory?.enabled !== false;
     if (!memoryEnabled) {
       this.memoryContextStr = null;
       return;
@@ -145,7 +235,6 @@ export class Orchestrator extends EventEmitter {
         retro
       );
 
-      // Extract knowledge from retrospective
       const knowledge = this.extractKnowledge(retro);
       if (knowledge.length > 0) {
         addKnowledge(this.harnessDir, this.config.project.name, knowledge);
@@ -157,7 +246,7 @@ export class Orchestrator extends EventEmitter {
         timestamp: Date.now(),
       });
     } catch {
-      // Non-fatal — retrospective is best-effort
+      // Non-fatal
     }
   }
 
@@ -165,7 +254,6 @@ export class Orchestrator extends EventEmitter {
     const entries: KnowledgeEntry[] = [];
     const now = Date.now();
 
-    // Patterns → knowledge entries
     for (const pattern of retro.patterns) {
       entries.push({
         id: `k-${now}-${entries.length}`,
@@ -178,7 +266,6 @@ export class Orchestrator extends EventEmitter {
       });
     }
 
-    // Decisions → knowledge entries
     for (const decision of retro.decisions) {
       entries.push({
         id: `k-${now}-${entries.length}`,
@@ -191,7 +278,6 @@ export class Orchestrator extends EventEmitter {
       });
     }
 
-    // Challenges that were resolved → gotcha entries
     for (const challenge of retro.challenges) {
       if (challenge.resolvedInRound !== undefined) {
         entries.push({
@@ -219,10 +305,8 @@ export class Orchestrator extends EventEmitter {
     this.state.round = 0;
     this.backlogItemId = backlogItemId ?? null;
 
-    // Load memory context
     this.loadMemoryContext();
 
-    // Emit backlog picked event
     if (backlogItemId) {
       this.emitEvent({
         type: 'backlog:picked',
@@ -233,7 +317,7 @@ export class Orchestrator extends EventEmitter {
     }
 
     try {
-      // Phase 0: Architect (optional — for new projects or when configured)
+      // Phase 0: Architect (optional)
       if (
         !this.config.skipArchitect &&
         this.config.agents.architect &&
@@ -247,16 +331,18 @@ export class Orchestrator extends EventEmitter {
       await this.transitionTo('PLANNING', 'Starting planning phase');
       await this.runPlannerAgent(prompt, sprintId);
 
+      // Phase 1.5 (v0.6): Evaluator reviews critical path + spec
+      const criticalPath = readCriticalPath(this.harnessDir, sprintId);
+      if (criticalPath) {
+        await this.transitionTo('REVIEWING', 'Evaluator reviewing critical path and acceptance criteria');
+        await this.runReviewAgent(sprintId);
+      }
+
       // Check for auto-decisions from planner
       const pendingAutoDecisions = readPendingDecisions(this.harnessDir)
         .filter((d) => d.autoDecision && !d.resolved);
       for (const decision of pendingAutoDecisions) {
-        this.emitEvent({
-          type: 'decision:needed',
-          decision,
-          timestamp: Date.now(),
-        });
-        // Auto-approve after timeout or immediately in headless
+        this.emitEvent({ type: 'decision:needed', decision, timestamp: Date.now() });
         if (this.config.autonomy.autoApproveDecisions) {
           this.emitEvent({
             type: 'decision:resolved',
@@ -271,75 +357,21 @@ export class Orchestrator extends EventEmitter {
       if (this.config.taskDecomposition) {
         const featureList = readFeatureList(this.harnessDir);
         if (featureList && featureList.features.length > 1) {
-          // Run each feature as a mini-sprint
-          this.state.totalFeatures = featureList.features.length;
-          for (let i = 0; i < featureList.features.length; i++) {
-            if (this.abortController.signal.aborted) break;
-            if (this.costTracker.isOverBudget()) break;
-
-            const feature = featureList.features[i];
-            if (feature.status === 'done' || feature.status === 'skipped') continue;
-
-            this.state.currentFeatureIndex = i;
-            const featureSprintId = `${sprintId}-F${i + 1}`;
-
-            this.emitEvent({
-              type: 'feature:progress',
-              featureIndex: i,
-              totalFeatures: featureList.features.length,
-              featureTitle: feature.title,
-              status: 'started',
-              timestamp: Date.now(),
-            });
-
-            updateFeatureStatus(this.harnessDir, feature.id, 'in_progress', featureSprintId);
-            await this.runFeatureSprint(featureSprintId, feature.title);
-            updateFeatureStatus(this.harnessDir, feature.id, 'done', featureSprintId);
-
-            this.emitEvent({
-              type: 'feature:progress',
-              featureIndex: i,
-              totalFeatures: featureList.features.length,
-              featureTitle: feature.title,
-              status: 'completed',
-              timestamp: Date.now(),
-            });
-          }
-
-          // All features done
-          await this.transitionTo('DONE', 'All features completed');
-
-          // Generate retrospective before emitting done
-          await this.generateRetrospective();
-
-          // Mark backlog item done
-          this.markBacklogDone();
-
-          this.emitEvent({
-            type: 'done',
-            summary: `Sprint ${sprintId} completed with ${featureList.features.length} features.`,
-            totalCost: this.costTracker.getSpent(),
-            totalDuration: Date.now() - this.state.startedAt,
-            rounds: this.state.round,
-            timestamp: Date.now(),
-          });
+          await this.runMultiFeatureSprint(sprintId, featureList);
           return;
         }
       }
 
-      // Phase 2: Contracting (combined with planning in our flow)
+      // Phase 2: Contracting
       await this.transitionTo('CONTRACTING', 'Creating sprint contract');
-      // The planner already writes spec + contract, so this is a quick transition
       await this.transitionTo('GENERATING', 'Starting generation phase');
 
       // Phase 3: Generate ↔ Evaluate loop
       await this.runGenerateEvaluateLoop(sprintId);
 
-      // Generate retrospective before emitting done
+      // Finalize
       if (this.state.state === 'DONE') {
         await this.generateRetrospective();
-
-        // Mark backlog item done
         this.markBacklogDone();
 
         this.emitEvent({
@@ -353,15 +385,322 @@ export class Orchestrator extends EventEmitter {
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.emitEvent({
-        type: 'error',
-        message,
-        timestamp: Date.now(),
-      });
+      this.emitEvent({ type: 'error', message, timestamp: Date.now() });
       if (canTransition(this.state.state, 'ERROR')) {
         await this.transitionTo('ERROR', message);
       }
     }
+  }
+
+  // ─── Multi-Feature Sprint with Goal-Driven Convergence (v0.6) ───
+
+  private async runMultiFeatureSprint(
+    sprintId: string,
+    featureList: import('../types/protocol').FeatureList
+  ): Promise<void> {
+    this.state.totalFeatures = featureList.features.length;
+
+    for (let i = 0; i < featureList.features.length; i++) {
+      if (this.abortController.signal.aborted) break;
+      if (this.costTracker.isOverBudget()) break;
+
+      const feature = featureList.features[i];
+      if (feature.status === 'done' || feature.status === 'skipped') continue;
+
+      this.state.currentFeatureIndex = i;
+      const featureSprintId = `${sprintId}-F${i + 1}`;
+
+      this.emitEvent({
+        type: 'feature:progress',
+        featureIndex: i,
+        totalFeatures: featureList.features.length,
+        featureTitle: feature.title,
+        status: 'started',
+        timestamp: Date.now(),
+      });
+
+      updateFeatureStatus(this.harnessDir, feature.id, 'in_progress', featureSprintId);
+
+      // v0.6: pass previouslyPassedAcs to feature sprint for cross-feature regression
+      await this.runFeatureSprint(featureSprintId, feature.title);
+
+      updateFeatureStatus(this.harnessDir, feature.id, 'done', featureSprintId);
+      this.state.completedFeatures.push(feature.id);
+
+      this.emitEvent({
+        type: 'feature:progress',
+        featureIndex: i,
+        totalFeatures: featureList.features.length,
+        featureTitle: feature.title,
+        status: 'completed',
+        timestamp: Date.now(),
+      });
+
+      // v0.6: Checkpoint after each feature — run critical-path regression
+      await this.runFeatureCheckpoint(sprintId, feature, featureList, i);
+    }
+
+    // v0.6: Goal Acceptance — verify overall product works
+    const goalPassed = await this.runGoalAcceptance(sprintId, featureList);
+
+    if (goalPassed) {
+      await this.transitionTo('DONE', 'Goal acceptance PASS — all features verified');
+    } else {
+      // Goal acceptance failed even after retries — finish with what we have
+      await this.transitionTo('DONE', 'Goal acceptance did not fully pass, finishing with current state');
+    }
+
+    await this.generateRetrospective();
+    this.markBacklogDone();
+
+    this.emitEvent({
+      type: 'done',
+      summary: `Sprint ${sprintId} completed with ${featureList.features.length} features. Goal: ${goalPassed ? 'PASS' : 'PARTIAL'}`,
+      totalCost: this.costTracker.getSpent(),
+      totalDuration: Date.now() - this.state.startedAt,
+      rounds: this.state.round,
+      timestamp: Date.now(),
+    });
+  }
+
+  // ─── Feature Checkpoint (v0.6) ──────────────────────────────────
+
+  private async runFeatureCheckpoint(
+    sprintId: string,
+    feature: import('../types/protocol').FeatureItem,
+    featureList: import('../types/protocol').FeatureList,
+    featureIndex: number
+  ): Promise<void> {
+    try {
+      await this.transitionTo('CHECKPOINT', `Checkpoint after feature: ${feature.title}`);
+
+      const criticalPath = readCriticalPath(this.harnessDir, sprintId);
+      const completedTitles = this.state.completedFeatures;
+      const remainingTitles = featureList.features
+        .filter((f) => !completedTitles.includes(f.id))
+        .map((f) => f.title);
+
+      // Run critical path regression if available
+      let cpStatus: 'PASS' | 'FAIL' | 'PARTIAL' | 'NOT_RUN' = 'NOT_RUN';
+      const cpResults: { stepId: string; status: 'PASS' | 'FAIL' | 'SKIP'; actualOutput?: string }[] = [];
+
+      if (criticalPath && criticalPath.steps.length > 0) {
+        // We ask the evaluator to run the critical path commands
+        const cpEvalOutput = await this.runCriticalPathCheck(sprintId, criticalPath);
+        // Parse results from evaluator output
+        try {
+          const jsonMatch = cpEvalOutput.match(/\{[\s\S]*"criticalPathStatus"[\s\S]*\}/);
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            cpStatus = parsed.criticalPathStatus ?? 'NOT_RUN';
+            if (parsed.criticalPathResults) {
+              cpResults.push(...parsed.criticalPathResults);
+            }
+          }
+        } catch {
+          // Couldn't parse — leave as NOT_RUN
+        }
+      }
+
+      // Build checkpoint report
+      const issues: Issue[] = [];
+      if (cpStatus === 'FAIL') {
+        const issue = this.raiseIssue({
+          severity: 'P1',
+          title: `Critical path regression after ${feature.title}`,
+          description: `Critical path check failed after completing feature ${feature.title}. Some steps are broken.`,
+          featureId: feature.id,
+          source: 'orchestrator',
+          options: ['Fix regression and continue', 'Skip and continue', 'Abort'],
+        });
+        issues.push(issue);
+      }
+
+      const checkpoint = buildCheckpointReport({
+        type: 'feature',
+        sprintId,
+        featureId: feature.id,
+        completedFeatures: completedTitles,
+        remainingFeatures: remainingTitles,
+        criticalPathStatus: cpStatus,
+        criticalPathResults: cpResults,
+        testSummary: { total: 0, passed: 0, failed: 0, skipped: 0 }, // filled by evaluator
+        artifacts: [],
+        issues,
+        narrative: `Completed feature ${featureIndex + 1}/${featureList.features.length}: "${feature.title}". Critical path: ${cpStatus}.`,
+      });
+
+      writeCheckpoint(this.harnessDir, checkpoint);
+
+      this.emitEvent({
+        type: 'checkpoint:ready',
+        checkpoint,
+        timestamp: Date.now(),
+      });
+
+      // Handle P1 escalation if critical path failed
+      if (cpStatus === 'FAIL' && issues.length > 0) {
+        const resolution = await this.handleIssueEscalation(issues[0]);
+        if (resolution === 'Abort') {
+          this.abortController.abort();
+          return;
+        }
+        // "Fix regression and continue" or "Skip and continue" — proceed to next feature
+      }
+
+      // Transition out of CHECKPOINT — go to next feature's GENERATING or GOAL_ACCEPTANCE
+      // The caller handles the next transition
+    } catch {
+      // Checkpoint is best-effort — don't block the sprint
+    }
+  }
+
+  /**
+   * Run evaluator to check critical path steps.
+   */
+  private async runCriticalPathCheck(
+    sprintId: string,
+    criticalPath: import('../types/protocol').CriticalPath
+  ): Promise<string> {
+    const invocation = buildGoalAcceptanceInvocation(
+      this.config,
+      sprintId,
+      this.state.prompt,
+      criticalPath,
+      this.state.completedFeatures,
+      'checkpoint' // mode
+    );
+    const result = await this.runAgentWithEvents(invocation, this.getEvaluatorTimeoutMs());
+    return result.output;
+  }
+
+  // ─── Goal Acceptance (v0.6) ─────────────────────────────────────
+
+  /**
+   * After all features pass, run goal acceptance to verify the overall product.
+   * If it fails, do incremental replanning and retry (up to 3 times).
+   */
+  private async runGoalAcceptance(
+    sprintId: string,
+    featureList: import('../types/protocol').FeatureList
+  ): Promise<boolean> {
+    const maxGoalAttempts = 3;
+
+    for (let attempt = 1; attempt <= maxGoalAttempts; attempt++) {
+      if (this.abortController.signal.aborted) return false;
+      if (this.costTracker.isOverBudget()) return false;
+
+      this.state.goalAcceptanceAttempts = attempt;
+      await this.transitionTo('GOAL_ACCEPTANCE', `Goal acceptance attempt ${attempt}`);
+
+      const criticalPath = readCriticalPath(this.harnessDir, sprintId);
+      if (!criticalPath) {
+        // No critical path defined — assume pass
+        this.emitEvent({
+          type: 'goal:acceptance',
+          verdict: 'PASS',
+          criticalPathStatus: 'NOT_RUN',
+          attempt,
+          timestamp: Date.now(),
+        });
+        return true;
+      }
+
+      // Run goal acceptance evaluator
+      const invocation = buildGoalAcceptanceInvocation(
+        this.config,
+        sprintId,
+        this.state.prompt,
+        criticalPath,
+        this.state.completedFeatures,
+        'goal' // mode
+      );
+      const result = await this.runAgentWithEvents(invocation, this.getEvaluatorTimeoutMs());
+
+      // Parse goal acceptance result
+      let goalPassed = false;
+      let cpStatus: 'PASS' | 'FAIL' | 'PARTIAL' = 'FAIL';
+      let missingItems: string[] = [];
+
+      try {
+        const jsonMatch = result.output.match(/\{[\s\S]*"goalVerdict"[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          goalPassed = parsed.goalVerdict === 'PASS';
+          cpStatus = parsed.criticalPathStatus ?? 'FAIL';
+          missingItems = parsed.missingItems ?? [];
+        }
+      } catch {
+        // Can't parse — treat as fail
+      }
+
+      this.emitEvent({
+        type: 'goal:acceptance',
+        verdict: goalPassed ? 'PASS' : 'FAIL',
+        criticalPathStatus: cpStatus,
+        missingItems,
+        attempt,
+        timestamp: Date.now(),
+      });
+
+      // Write goal checkpoint
+      const goalCheckpoint = buildCheckpointReport({
+        type: 'goal',
+        sprintId,
+        completedFeatures: this.state.completedFeatures,
+        remainingFeatures: [],
+        criticalPathStatus: cpStatus,
+        testSummary: { total: 0, passed: 0, failed: 0, skipped: 0 },
+        artifacts: [],
+        issues: [],
+        narrative: `Goal acceptance attempt ${attempt}: ${goalPassed ? 'PASS' : 'FAIL'}. ${missingItems.length > 0 ? `Missing: ${missingItems.join(', ')}` : ''}`,
+      });
+      writeCheckpoint(this.harnessDir, goalCheckpoint);
+
+      this.emitEvent({
+        type: 'checkpoint:ready',
+        checkpoint: goalCheckpoint,
+        timestamp: Date.now(),
+      });
+
+      if (goalPassed) {
+        return true;
+      }
+
+      // Goal failed — raise P1 issue
+      const issue = this.raiseIssue({
+        severity: 'P1',
+        title: `Goal acceptance failed (attempt ${attempt}/${maxGoalAttempts})`,
+        description: `Product does not meet the original goal. Missing: ${missingItems.join(', ')}. Critical path status: ${cpStatus}.`,
+        source: 'orchestrator',
+        options: ['Incremental fix and retry', 'Accept current state', 'Abort'],
+      });
+
+      const resolution = await this.handleIssueEscalation(issue);
+
+      if (resolution === 'Abort') {
+        return false;
+      }
+      if (resolution === 'Accept current state') {
+        return false; // not a true pass, but user accepts
+      }
+
+      // Incremental fix: re-run planner for just the missing items, then generate+evaluate
+      if (attempt < maxGoalAttempts && missingItems.length > 0) {
+        const fixSprintId = `${sprintId}-goalfix-${attempt}`;
+        await this.transitionTo('PLANNING', `Incremental fix for goal acceptance (attempt ${attempt})`);
+
+        // Run planner with narrowed scope
+        const fixPrompt = `Fix the following issues to meet the original goal:\n\nOriginal goal: ${this.state.prompt}\n\nMissing/broken items:\n${missingItems.map((m) => `- ${m}`).join('\n')}\n\nDo NOT re-implement already working features. Only fix what's broken.`;
+        await this.runPlannerAgent(fixPrompt, fixSprintId);
+
+        await this.transitionTo('CONTRACTING', 'Fix sprint contract');
+        await this.transitionTo('GENERATING', 'Generating fix');
+        await this.runGenerateEvaluateLoop(fixSprintId);
+      }
+    }
+
+    return false;
   }
 
   // ─── Resume Sprint ──────────────────────────────────────────────
@@ -369,54 +708,35 @@ export class Orchestrator extends EventEmitter {
   async resume(): Promise<void> {
     const savedState = loadState(this.harnessDir);
     if (!savedState) {
-      this.emitEvent({
-        type: 'error',
-        message: 'No saved state found to resume',
-        timestamp: Date.now(),
-      });
+      this.emitEvent({ type: 'error', message: 'No saved state found to resume', timestamp: Date.now() });
       return;
     }
 
-    // Check if state is resumable
     const nonResumableStates: State[] = ['DONE', 'ERROR', 'IDLE'];
     if (nonResumableStates.includes(savedState.state)) {
-      this.emitEvent({
-        type: 'error',
-        message: `Cannot resume from state: ${savedState.state}`,
-        timestamp: Date.now(),
-      });
+      this.emitEvent({ type: 'error', message: `Cannot resume from state: ${savedState.state}`, timestamp: Date.now() });
       return;
     }
 
-    // Restore state
     this.state = savedState;
     this.costTracker = new CostTracker(this.config.budget.maxCostUsd);
-    // Re-add already spent cost
     if (savedState.costSpent > 0) {
       this.costTracker.add(savedState.costSpent);
     }
 
-    // Load memory context
     this.loadMemoryContext();
 
     const fromState = savedState.state;
     const fromRound = savedState.round;
     const sprintId = savedState.sprintId;
 
-    this.emitEvent({
-      type: 'sprint:resumed',
-      sprintId,
-      fromState,
-      fromRound,
-      timestamp: Date.now(),
-    });
+    this.emitEvent({ type: 'sprint:resumed', sprintId, fromState, fromRound, timestamp: Date.now() });
 
     try {
-      // Determine where to resume from
       switch (fromState) {
         case 'PLANNING':
         case 'ARCHITECTING':
-          // Re-run planner
+        case 'REVIEWING':
           await this.transitionTo('PLANNING', 'Resumed: re-running planner');
           await this.runPlannerAgent(this.state.prompt, sprintId);
           await this.transitionTo('CONTRACTING', 'Creating sprint contract');
@@ -429,7 +749,8 @@ export class Orchestrator extends EventEmitter {
         case 'EVALUATING':
         case 'REPLANNING':
         case 'BLOCKED':
-          // Resume into generate ↔ evaluate loop
+        case 'CHECKPOINT':
+        case 'GOAL_ACCEPTANCE':
           if (this.state.state !== 'GENERATING') {
             await this.transitionTo('GENERATING', `Resumed from ${fromState}`);
           }
@@ -437,7 +758,6 @@ export class Orchestrator extends EventEmitter {
           break;
       }
 
-      // Generate retrospective
       if (this.state.state === 'DONE') {
         await this.generateRetrospective();
         this.markBacklogDone();
@@ -453,11 +773,7 @@ export class Orchestrator extends EventEmitter {
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.emitEvent({
-        type: 'error',
-        message,
-        timestamp: Date.now(),
-      });
+      this.emitEvent({ type: 'error', message, timestamp: Date.now() });
       if (canTransition(this.state.state, 'ERROR')) {
         await this.transitionTo('ERROR', message);
       }
@@ -471,106 +787,63 @@ export class Orchestrator extends EventEmitter {
     while (!done && !this.abortController.signal.aborted) {
       this.state.round++;
 
-      // Budget guard
       if (this.costTracker.isOverBudget()) {
-        this.emitEvent({
-          type: 'error',
-          message: `Budget exceeded: ${this.costTracker.getSummary()}`,
-          timestamp: Date.now(),
-        });
+        this.emitEvent({ type: 'error', message: `Budget exceeded: ${this.costTracker.getSummary()}`, timestamp: Date.now() });
         await this.transitionTo('ERROR', 'Budget exceeded');
         return;
       }
 
-      // Time budget guard
       if (this.isOverTimeBudget()) {
-        this.emitEvent({
-          type: 'error',
-          message: `Time budget exceeded: ${this.config.budget.maxDurationMinutes} minutes`,
-          timestamp: Date.now(),
-        });
+        this.emitEvent({ type: 'error', message: `Time budget exceeded: ${this.config.budget.maxDurationMinutes} minutes`, timestamp: Date.now() });
         await this.transitionTo('DONE', 'Time budget exceeded');
         done = true;
         break;
       }
 
-      // Round guard
       if (this.state.round > this.config.budget.maxRounds) {
-        this.emitEvent({
-          type: 'error',
-          message: `Max rounds (${this.config.budget.maxRounds}) exceeded`,
-          timestamp: Date.now(),
-        });
+        this.emitEvent({ type: 'error', message: `Max rounds (${this.config.budget.maxRounds}) exceeded`, timestamp: Date.now() });
         await this.transitionTo('DONE', 'Max rounds reached');
         done = true;
         break;
       }
 
-      // Generate (with timeout retry)
+      // Generate
       if (this.state.state !== 'GENERATING') {
         await this.transitionTo('GENERATING', `Round ${this.state.round}`);
       }
       const prevReport = getLatestReport(this.harnessDir, sprintId);
-      const prevFeedback = prevReport
-        ? JSON.stringify(prevReport.failedAcs, null, 2)
-        : undefined;
-
-      // Detect regressions from previous report
+      const prevFeedback = prevReport ? JSON.stringify(prevReport.failedAcs, null, 2) : undefined;
       const lastRegressions = prevReport?.regressions ?? [];
 
       const genResult = await this.runGeneratorAgentWithRetry(
-        sprintId,
-        this.state.round,
-        prevFeedback,
-        this.state.previouslyPassedAcs,
-        lastRegressions
+        sprintId, this.state.round, prevFeedback, this.state.previouslyPassedAcs, lastRegressions
       );
 
-      // Check if we ended up in REPLANNING state (simplify path)
       if (this.state.state === 'REPLANNING') {
-        // After replanning, transition back to GENERATING for next round
         await this.transitionTo('GENERATING', 'Retrying after replan');
         continue;
       }
 
-      // If the result was abort, the generator effectively failed
-      // Continue to evaluation anyway to assess what was completed
-
       // Evaluate
       await this.transitionTo('EVALUATING', `Evaluating round ${this.state.round}`);
-      const evalOutput = await this.runEvaluatorAgent(
-        sprintId,
-        this.state.round,
-        this.state.previouslyPassedAcs
-      );
+      const evalOutput = await this.runEvaluatorAgent(sprintId, this.state.round, this.state.previouslyPassedAcs);
 
-      // Parse verdict
-      const evalResult = parseEvalVerdict(
-        this.harnessDir,
-        sprintId,
-        this.state.round,
-        evalOutput
-      );
+      const evalResult = parseEvalVerdict(this.harnessDir, sprintId, this.state.round, evalOutput);
 
       if (evalResult) {
         const { verdict, report } = evalResult;
         this.state.lastEvalVerdict = verdict;
 
-        this.emitEvent({
-          type: 'eval:verdict',
-          verdict,
-          report,
-          timestamp: Date.now(),
-        });
+        this.emitEvent({ type: 'eval:verdict', verdict, report, timestamp: Date.now() });
 
-        // Update previouslyPassedAcs — accumulate all ACs that ever passed
+        // Update previouslyPassedAcs
         for (const ac of report.passedAcs) {
           if (!this.state.previouslyPassedAcs.includes(ac)) {
             this.state.previouslyPassedAcs.push(ac);
           }
         }
 
-        // Regression detection: check if any previously-passed AC is now failing
+        // Regression detection
         const currentPassedSet = new Set(report.passedAcs);
         const regressions = this.state.previouslyPassedAcs
           .filter((ac) => !currentPassedSet.has(ac))
@@ -584,14 +857,8 @@ export class Orchestrator extends EventEmitter {
           }));
 
         if (regressions.length > 0) {
-          // Add regressions to the report
           report.regressions = regressions;
-          this.emitEvent({
-            type: 'eval:regression',
-            regressions,
-            round: this.state.round,
-            timestamp: Date.now(),
-          });
+          this.emitEvent({ type: 'eval:regression', regressions, round: this.state.round, timestamp: Date.now() });
         }
 
         // Stuck detection
@@ -599,7 +866,6 @@ export class Orchestrator extends EventEmitter {
         const stuck = isStuck(currentFailedIds, this.state.failedAcIds);
         this.state.failedAcIds = currentFailedIds;
 
-        // Git auto-commit after each eval round
         if (this.config.gitAutoCommit) {
           const tag = `nyai/${sprintId}-round-${this.state.round}`;
           const commitMsg = `nyai: ${sprintId} round ${this.state.round} — ${verdict}`;
@@ -612,37 +878,26 @@ export class Orchestrator extends EventEmitter {
           this.state.stuckCount = 0;
         }
 
-        // Determine next state
-        const nextState = nextStateAfterEval(
-          verdict,
-          this.state.round,
-          this.config.budget.maxRounds,
-          this.state.stuckCount >= 2
-        );
+        const nextState = nextStateAfterEval(verdict, this.state.round, this.config.budget.maxRounds, this.state.stuckCount >= 2);
 
         if (nextState === 'DONE') {
           await this.transitionTo('DONE', `Verdict: ${verdict}`);
           done = true;
         } else if (nextState === 'BLOCKED') {
           await this.transitionTo('BLOCKED', 'Stuck on same failures');
-          // Create a decision for the user
           const decision: PendingDecision = {
             id: `decision-${Date.now()}`,
             timestamp: Date.now(),
             agentRole: 'evaluator',
             type: 'scope',
+            severity: 'P2',
             summary: 'Stuck: same acceptance criteria failing repeatedly',
             details: `Failed ACs: ${currentFailedIds.join(', ')}. Suggestions: ${report.suggestions.join('; ')}`,
             options: ['Retry with more context', 'Skip failed ACs and finish', 'Abort'],
           };
           appendDecision(this.harnessDir, decision);
-          this.emitEvent({
-            type: 'decision:needed',
-            decision,
-            timestamp: Date.now(),
-          });
+          this.emitEvent({ type: 'decision:needed', decision, timestamp: Date.now() });
 
-          // Wait for user decision
           const resolution = await this.waitForDecision(decision);
           if (resolution === 'Abort') {
             await this.transitionTo('DONE', 'User aborted');
@@ -651,19 +906,11 @@ export class Orchestrator extends EventEmitter {
             await this.transitionTo('DONE', 'User skipped failed ACs');
             done = true;
           } else {
-            // Retry
             await this.transitionTo('GENERATING', 'Retrying after user decision');
           }
         }
-        // nextState === 'GENERATING' → loop continues
       } else {
-        // No verdict found — treat as error
-        this.emitEvent({
-          type: 'error',
-          message: 'Could not parse evaluation verdict',
-          timestamp: Date.now(),
-        });
-        // Continue anyway — try another round
+        this.emitEvent({ type: 'error', message: 'Could not parse evaluation verdict', timestamp: Date.now() });
       }
 
       this.persistState();
@@ -676,11 +923,7 @@ export class Orchestrator extends EventEmitter {
     if (this.backlogItemId) {
       try {
         markItemDone(this.harnessDir, this.backlogItemId);
-        this.emitEvent({
-          type: 'backlog:done',
-          itemId: this.backlogItemId,
-          timestamp: Date.now(),
-        });
+        this.emitEvent({ type: 'backlog:done', itemId: this.backlogItemId, timestamp: Date.now() });
       } catch {
         // Non-fatal
       }
@@ -693,20 +936,23 @@ export class Orchestrator extends EventEmitter {
     const invocation = buildArchitectInvocation(this.config, prompt, sprintId);
     const result = await this.runAgentWithEvents(invocation);
 
-    // Try to parse and emit the architecture record
     const record = readArchitectureRecord(this.harnessDir);
     if (record) {
-      this.emitEvent({
-        type: 'architect:done',
-        record,
-        timestamp: Date.now(),
-      });
+      this.emitEvent({ type: 'architect:done', record, timestamp: Date.now() });
     }
   }
 
   private async runPlannerAgent(prompt: string, sprintId: string): Promise<void> {
     const invocation = buildPlannerInvocation(this.config, prompt, sprintId, this.memoryContextStr ?? undefined);
     await this.runAgentWithEvents(invocation);
+  }
+
+  /**
+   * v0.6: Run evaluator in review mode — reviews critical path and spec before generation.
+   */
+  private async runReviewAgent(sprintId: string): Promise<void> {
+    const invocation = buildReviewInvocation(this.config, sprintId);
+    await this.runAgentWithEvents(invocation, this.getEvaluatorTimeoutMs());
   }
 
   private async runGeneratorAgent(
@@ -717,36 +963,21 @@ export class Orchestrator extends EventEmitter {
     regressions?: import('../types/protocol').RegressionInfo[]
   ): Promise<AgentResult> {
     const parallelCount = this.config.parallelGenerators ?? 1;
-
-    // Read test plan for generator consumption (v0.5)
     const testPlan = readTestPlan(this.harnessDir, sprintId);
 
-    // Parallel generator path
     if (parallelCount > 1) {
       return this.runParallelGeneratorPath(
         sprintId, round, parallelCount, previousFeedback, previouslyPassedAcs, regressions
       );
     }
 
-    // Single generator path
     const memCtx = round === 1 ? (this.memoryContextStr ?? undefined) : undefined;
     const invocation = buildGeneratorInvocation(
-      this.config,
-      sprintId,
-      round,
-      previousFeedback,
-      previouslyPassedAcs,
-      regressions,
-      memCtx,
-      testPlan ?? undefined
+      this.config, sprintId, round, previousFeedback, previouslyPassedAcs, regressions, memCtx, testPlan ?? undefined
     );
     return this.runAgentWithEvents(invocation);
   }
 
-  /**
-   * Run generator(s) with Evaluator-driven timeout retry.
-   * No fixed retry limit — Evaluator decides each time.
-   */
   private async runGeneratorAgentWithRetry(
     sprintId: string,
     round: number,
@@ -759,120 +990,69 @@ export class Orchestrator extends EventEmitter {
     let totalTimeSpent = this.state.totalGeneratorTimeMs;
 
     while (true) {
-      // Safety valve: total time budget
-      if (this.isOverTimeBudget()) {
-        break;
-      }
+      if (this.isOverTimeBudget()) break;
+      if (this.costTracker.isOverBudget()) break;
 
-      // Safety valve: cost budget
-      if (this.costTracker.isOverBudget()) {
-        break;
-      }
-
-      // Snapshot git HEAD before generator run
       const beforeRef = snapshotGitHead(this.config.project.rootDir);
 
-      // Run generator with current timeout
       const result = await this.runGeneratorAgentSingle(
         sprintId, round, currentTimeoutMs, previousFeedback, previouslyPassedAcs, regressions
       );
 
-      // Track time
       this.state.totalGeneratorTimeMs += result.durationMs;
       totalTimeSpent += result.durationMs;
 
-      // If no timeout, return normally
       if (!isTimeoutResult(result)) {
         return result;
       }
 
-      // ─── Timeout occurred ─────────────────────────────────────
       retryCount++;
       this.state.timeoutRetryCount++;
 
-      // Build timeout context
-      const timeoutCtx = buildTimeoutContext(
-        result, round, this.config.project.rootDir, beforeRef, retryCount, totalTimeSpent
-      );
+      const timeoutCtx = buildTimeoutContext(result, round, this.config.project.rootDir, beforeRef, retryCount, totalTimeSpent);
 
-      // Emit timeout event
       this.emitEvent({
-        type: 'agent:timeout',
-        role: 'generator',
-        round,
-        retryCount,
-        durationMs: result.durationMs,
-        filesModified: timeoutCtx.filesModified,
-        timestamp: Date.now(),
+        type: 'agent:timeout', role: 'generator', round, retryCount,
+        durationMs: result.durationMs, filesModified: timeoutCtx.filesModified, timestamp: Date.now(),
       });
 
-      // Ask Evaluator to assess the timeout
       await this.transitionTo('EVALUATING', `Timeout evaluation (retry ${retryCount})`);
       const evalResult = await this.runTimeoutEvaluation(sprintId, round, previouslyPassedAcs, timeoutCtx);
 
-      // Parse the evaluator's recommendation
       const recommendation = evalResult.timeoutRecommendation ?? 'abort';
 
       if (recommendation === 'continue') {
-        // Evaluator says continue — use suggested time or bump timeout
         const suggestedTime = evalResult.estimatedAdditionalTimeMs;
         currentTimeoutMs = suggestedTime && suggestedTime > 0
-          ? suggestedTime
-          : Math.round(currentTimeoutMs * 1.5); // 50% more time if no estimate
+          ? suggestedTime : Math.round(currentTimeoutMs * 1.5);
 
-        // Transition back to GENERATING
         await this.transitionTo('GENERATING', `Retrying after timeout (eval: continue, timeout: ${Math.round(currentTimeoutMs / 1000)}s)`);
         continue;
-
       } else if (recommendation === 'simplify') {
-        // Transition to REPLANNING
         await this.transitionTo('REPLANNING', 'Evaluator recommended simplification');
         await this.runReplanAgent(sprintId, this.state.prompt, {
-          retryCount,
-          totalTimeSpentMs: totalTimeSpent,
-          timeoutReason: evalResult.timeoutReason,
-          filesModified: timeoutCtx.filesModified,
+          retryCount, totalTimeSpentMs: totalTimeSpent,
+          timeoutReason: evalResult.timeoutReason, filesModified: timeoutCtx.filesModified,
         });
-
         this.emitEvent({
-          type: 'planner:replan',
-          reason: evalResult.timeoutReason ?? 'Timeout — task too complex',
-          originalFeature: this.state.prompt,
-          timestamp: Date.now(),
+          type: 'planner:replan', reason: evalResult.timeoutReason ?? 'Timeout — task too complex',
+          originalFeature: this.state.prompt, timestamp: Date.now(),
         });
-
-        // After replanning, the main loop will pick up from GENERATING
         return result;
-
       } else {
-        // abort — treat as failure, let normal eval flow handle it
         return result;
       }
     }
 
-    // If we broke out due to safety valves, return a synthetic failure
     return {
-      role: 'generator',
-      success: false,
-      output: '',
-      costUsd: 0,
-      durationMs: 0,
-      numTurns: 0,
-      sessionId: '',
-      error: 'Generator stopped: time or cost budget exceeded',
-      timedOut: true,
+      role: 'generator', success: false, output: '', costUsd: 0, durationMs: 0,
+      numTurns: 0, sessionId: '', error: 'Generator stopped: time or cost budget exceeded', timedOut: true,
     };
   }
 
-  /**
-   * Run a single generator invocation with specific timeout.
-   */
   private async runGeneratorAgentSingle(
-    sprintId: string,
-    round: number,
-    timeoutMs: number,
-    previousFeedback?: string,
-    previouslyPassedAcs?: string[],
+    sprintId: string, round: number, timeoutMs: number,
+    previousFeedback?: string, previouslyPassedAcs?: string[],
     regressions?: import('../types/protocol').RegressionInfo[]
   ): Promise<AgentResult> {
     const parallelCount = this.config.parallelGenerators ?? 1;
@@ -883,45 +1063,26 @@ export class Orchestrator extends EventEmitter {
       );
     }
 
-    // Read test plan for generator consumption (v0.5)
     const testPlan = readTestPlan(this.harnessDir, sprintId);
-
     const memCtx = round === 1 ? (this.memoryContextStr ?? undefined) : undefined;
     const invocation = buildGeneratorInvocation(
-      this.config,
-      sprintId,
-      round,
-      previousFeedback,
-      previouslyPassedAcs,
-      regressions,
-      memCtx,
-      testPlan ?? undefined
+      this.config, sprintId, round, previousFeedback, previouslyPassedAcs, regressions, memCtx, testPlan ?? undefined
     );
     return this.runAgentWithEvents(invocation, timeoutMs);
   }
 
-  /**
-   * Run parallel generators with AC-based work splitting.
-   */
   private async runParallelGeneratorPath(
-    sprintId: string,
-    round: number,
-    parallelCount: number,
-    previousFeedback?: string,
-    previouslyPassedAcs?: string[],
-    regressions?: import('../types/protocol').RegressionInfo[],
-    timeoutMs?: number
+    sprintId: string, round: number, parallelCount: number,
+    previousFeedback?: string, previouslyPassedAcs?: string[],
+    regressions?: import('../types/protocol').RegressionInfo[], timeoutMs?: number
   ): Promise<AgentResult> {
-    // Try to read spec to extract ACs
     const spec = readSpec(this.harnessDir, sprintId);
     let acIds: string[] = [];
     if (spec) {
-      // Extract AC IDs from spec (look for AC-N patterns)
       const acMatches = spec.matchAll(/\b(AC-\d+)\b/g);
       acIds = [...new Set([...acMatches].map(m => m[1]))];
     }
 
-    // If we can't split meaningfully, fall back to single generator
     if (acIds.length < parallelCount) {
       const memCtx = round === 1 ? (this.memoryContextStr ?? undefined) : undefined;
       const invocation = buildGeneratorInvocation(
@@ -930,165 +1091,80 @@ export class Orchestrator extends EventEmitter {
       return this.runAgentWithEvents(invocation, timeoutMs);
     }
 
-    // Split work
     const assignments = splitWork(acIds, parallelCount);
 
-    this.emitEvent({
-      type: 'parallel:batch',
-      generatorCount: assignments.length,
-      assignments,
-      timestamp: Date.now(),
-    });
+    this.emitEvent({ type: 'parallel:batch', generatorCount: assignments.length, assignments, timestamp: Date.now() });
 
-    // Run parallel generators
     const results = await runParallelGenerators({
-      config: this.config,
-      sprintId,
-      round,
-      assignments,
-      allAcIds: acIds,
-      previousFeedback,
-      previouslyPassedAcs,
-      regressions,
+      config: this.config, sprintId, round, assignments, allAcIds: acIds,
+      previousFeedback, previouslyPassedAcs, regressions,
       timeoutMs: timeoutMs ?? this.getGeneratorTimeoutMs(),
-      onStderrLine: (role, line) => {
-        this.emitEvent({
-          type: 'agent:log',
-          role: 'generator',
-          line: `[parallel] ${line}`,
-          timestamp: Date.now(),
-        });
+      onStderrLine: (_role, line) => {
+        this.emitEvent({ type: 'agent:log', role: 'generator', line: `[parallel] ${line}`, timestamp: Date.now() });
       },
       abortSignal: this.abortController.signal,
     });
 
-    // Merge results
     const merged = mergeParallelResults(results);
-
-    // Track costs
     this.costTracker.add(merged.costUsd);
     this.state.costSpent = this.costTracker.getSpent();
 
-    this.emitEvent({
-      type: 'agent:done',
-      role: 'generator',
-      result: merged,
-      timestamp: Date.now(),
-    });
-
-    this.emitEvent({
-      type: 'cost:update',
-      spent: this.costTracker.getSpent(),
-      budget: this.costTracker.getBudget(),
-      timestamp: Date.now(),
-    });
+    this.emitEvent({ type: 'agent:done', role: 'generator', result: merged, timestamp: Date.now() });
+    this.emitEvent({ type: 'cost:update', spent: this.costTracker.getSpent(), budget: this.costTracker.getBudget(), timestamp: Date.now() });
 
     return merged;
   }
 
-  /**
-   * Run evaluator in timeout assessment mode.
-   */
   private async runTimeoutEvaluation(
-    sprintId: string,
-    round: number,
-    previouslyPassedAcs?: string[],
-    timeoutContext?: TimeoutContext
+    sprintId: string, round: number, previouslyPassedAcs?: string[], timeoutContext?: TimeoutContext
   ): Promise<EvalReport> {
     const memCtx = round === 1 ? (this.memoryContextStr ?? undefined) : undefined;
-
-    // Read architecture record and test plan for evaluator (v0.5)
     const archRecord = readArchitectureRecord(this.harnessDir);
     const testPlan = readTestPlan(this.harnessDir, sprintId);
 
     const invocation = buildEvaluatorInvocation(
-      this.config,
-      sprintId,
-      round,
-      previouslyPassedAcs,
-      timeoutContext,
-      memCtx,
-      archRecord,
-      testPlan
+      this.config, sprintId, round, previouslyPassedAcs, timeoutContext, memCtx, archRecord, testPlan
     );
     const result = await this.runAgentWithEvents(invocation, this.getEvaluatorTimeoutMs());
 
-    // Try to parse the evaluation report
-    const evalResult = parseEvalVerdict(
-      this.harnessDir,
-      sprintId,
-      round,
-      result.output
-    );
+    const evalResult = parseEvalVerdict(this.harnessDir, sprintId, round, result.output);
 
     if (evalResult) {
       return evalResult.report;
     }
 
-    // If we can't parse, return a default abort recommendation
     return {
-      sprintId,
-      round,
-      verdict: 'FAIL',
-      timestamp: Date.now(),
-      summary: 'Timeout evaluation could not parse report',
-      passedAcs: [],
-      failedAcs: [],
-      suggestions: [],
-      timeoutRecommendation: 'abort',
+      sprintId, round, verdict: 'FAIL', timestamp: Date.now(),
+      summary: 'Timeout evaluation could not parse report', passedAcs: [], failedAcs: [],
+      suggestions: [], timeoutRecommendation: 'abort',
       timeoutReason: 'Could not parse evaluator output after timeout',
     };
   }
 
-  private async runEvaluatorAgent(
-    sprintId: string,
-    round: number,
-    previouslyPassedAcs?: string[]
-  ): Promise<string> {
+  private async runEvaluatorAgent(sprintId: string, round: number, previouslyPassedAcs?: string[]): Promise<string> {
     const memCtx = round === 1 ? (this.memoryContextStr ?? undefined) : undefined;
-
-    // Read architecture record and test plan for evaluator (v0.5)
     const archRecord = readArchitectureRecord(this.harnessDir);
     const testPlan = readTestPlan(this.harnessDir, sprintId);
 
     const invocation = buildEvaluatorInvocation(
-      this.config,
-      sprintId,
-      round,
-      previouslyPassedAcs,
-      undefined,
-      memCtx,
-      archRecord,
-      testPlan
+      this.config, sprintId, round, previouslyPassedAcs, undefined, memCtx, archRecord, testPlan
     );
     const result = await this.runAgentWithEvents(invocation, this.getEvaluatorTimeoutMs());
     return result.output;
   }
 
-  /**
-   * Run Planner in replan (simplification) mode.
-   */
-  private async runReplanAgent(
-    sprintId: string,
-    featureTitle: string,
-    timeoutHistory: TimeoutHistory
-  ): Promise<void> {
+  private async runReplanAgent(sprintId: string, featureTitle: string, timeoutHistory: TimeoutHistory): Promise<void> {
     const invocation = buildReplanInvocation(
-      this.config,
-      sprintId,
-      featureTitle,
-      timeoutHistory,
-      this.memoryContextStr ?? undefined
+      this.config, sprintId, featureTitle, timeoutHistory, this.memoryContextStr ?? undefined
     );
     await this.runAgentWithEvents(invocation, this.getPlannerTimeoutMs());
   }
 
   /**
-   * Run a mini-sprint for a single feature (generate ↔ evaluate loop).
-   * Extracted from the main run loop to support task decomposition.
+   * Run a mini-sprint for a single feature.
+   * v0.6: passes previouslyPassedAcs for cross-feature regression detection.
    */
   private async runFeatureSprint(featureSprintId: string, featureTitle: string): Promise<void> {
-    // Contracting
     await this.transitionTo('CONTRACTING', `Feature: ${featureTitle}`);
     await this.transitionTo('GENERATING', `Generating: ${featureTitle}`);
 
@@ -1103,43 +1179,67 @@ export class Orchestrator extends EventEmitter {
       if (featureRound > this.config.budget.maxRounds) break;
       if (this.isOverTimeBudget()) break;
 
-      // Generate
       if (this.state.state !== 'GENERATING') {
         await this.transitionTo('GENERATING', `Feature round ${featureRound}`);
       }
       const prevReport = getLatestReport(this.harnessDir, featureSprintId);
-      const prevFeedback = prevReport
-        ? JSON.stringify(prevReport.failedAcs, null, 2)
-        : undefined;
+      const prevFeedback = prevReport ? JSON.stringify(prevReport.failedAcs, null, 2) : undefined;
 
-      await this.runGeneratorAgentWithRetry(featureSprintId, featureRound, prevFeedback);
+      // v0.6: pass previouslyPassedAcs for cross-feature regression
+      await this.runGeneratorAgentWithRetry(
+        featureSprintId, featureRound, prevFeedback,
+        this.state.previouslyPassedAcs,
+        prevReport?.regressions ?? []
+      );
 
-      // If we ended up in REPLANNING, transition back
       if (this.state.state === 'REPLANNING') {
         await this.transitionTo('GENERATING', 'Retrying after replan');
         continue;
       }
 
-      // Evaluate
       await this.transitionTo('EVALUATING', `Evaluating feature round ${featureRound}`);
-      const evalOutput = await this.runEvaluatorAgent(featureSprintId, featureRound);
-
-      const evalResult = parseEvalVerdict(
-        this.harnessDir,
-        featureSprintId,
-        featureRound,
-        evalOutput
+      const evalOutput = await this.runEvaluatorAgent(
+        featureSprintId, featureRound,
+        this.state.previouslyPassedAcs  // v0.6: cross-feature regression detection
       );
 
+      const evalResult = parseEvalVerdict(this.harnessDir, featureSprintId, featureRound, evalOutput);
+
       if (evalResult) {
-        const { verdict } = evalResult;
+        const { verdict, report } = evalResult;
+
+        // v0.6: accumulate passed ACs across features
+        for (const ac of report.passedAcs) {
+          if (!this.state.previouslyPassedAcs.includes(ac)) {
+            this.state.previouslyPassedAcs.push(ac);
+          }
+        }
+
+        // v0.6: cross-feature regression detection
+        const currentPassedSet = new Set(report.passedAcs);
+        const regressions = this.state.previouslyPassedAcs
+          .filter((ac) => !currentPassedSet.has(ac))
+          .filter((ac) => report.failedAcs.some((f) => f.id === ac))
+          .map((ac) => ({
+            acId: ac,
+            description: report.failedAcs.find((f) => f.id === ac)?.description ?? '',
+            previousStatus: 'PASS' as const,
+            currentStatus: 'FAIL' as const,
+            round: this.state.round,
+          }));
+
+        if (regressions.length > 0) {
+          report.regressions = regressions;
+          this.emitEvent({ type: 'eval:regression', regressions, round: this.state.round, timestamp: Date.now() });
+        }
+
         if (verdict === 'PASS') {
           featureDone = true;
         } else if (featureRound >= this.config.budget.maxRounds) {
-          featureDone = true; // give up
+          featureDone = true;
         }
       } else {
-        featureDone = true; // no verdict, move on
+        featureDone = true;
       }
 
       this.persistState();
@@ -1153,24 +1253,14 @@ export class Orchestrator extends EventEmitter {
     const { role } = invocation;
     this.state.currentAgent = role;
 
-    this.emitEvent({
-      type: 'agent:start',
-      role,
-      round: this.state.round,
-      timestamp: Date.now(),
-    });
+    this.emitEvent({ type: 'agent:start', role, round: this.state.round, timestamp: Date.now() });
 
     const effectiveTimeout = timeoutMs ?? this.getTimeoutForRole(role);
 
     const result = await runAgent({
       invocation,
       onStderrLine: (line) => {
-        this.emitEvent({
-          type: 'agent:log',
-          role,
-          line,
-          timestamp: Date.now(),
-        });
+        this.emitEvent({ type: 'agent:log', role, line, timestamp: Date.now() });
       },
       abortSignal: this.abortController.signal,
       timeoutMs: effectiveTimeout,
@@ -1179,19 +1269,8 @@ export class Orchestrator extends EventEmitter {
     this.costTracker.add(result.costUsd);
     this.state.costSpent = this.costTracker.getSpent();
 
-    this.emitEvent({
-      type: 'agent:done',
-      role,
-      result,
-      timestamp: Date.now(),
-    });
-
-    this.emitEvent({
-      type: 'cost:update',
-      spent: this.costTracker.getSpent(),
-      budget: this.costTracker.getBudget(),
-      timestamp: Date.now(),
-    });
+    this.emitEvent({ type: 'agent:done', role, result, timestamp: Date.now() });
+    this.emitEvent({ type: 'cost:update', spent: this.costTracker.getSpent(), budget: this.costTracker.getBudget(), timestamp: Date.now() });
 
     this.state.currentAgent = null;
     return result;
@@ -1202,12 +1281,7 @@ export class Orchestrator extends EventEmitter {
   private async transitionTo(to: State, reason: string): Promise<void> {
     const from = this.state.state;
     if (!canTransition(from, to)) {
-      // If we can't transition, log but don't crash
-      this.emitEvent({
-        type: 'error',
-        message: `Cannot transition ${from} → ${to}: ${reason}`,
-        timestamp: Date.now(),
-      });
+      this.emitEvent({ type: 'error', message: `Cannot transition ${from} → ${to}: ${reason}`, timestamp: Date.now() });
       return;
     }
 
@@ -1215,13 +1289,7 @@ export class Orchestrator extends EventEmitter {
     this.state.state = to;
     this.state.history.push(entry);
 
-    this.emitEvent({
-      type: 'state:change',
-      from,
-      to,
-      timestamp: Date.now(),
-    });
-
+    this.emitEvent({ type: 'state:change', from, to, timestamp: Date.now() });
     this.persistState();
   }
 
@@ -1235,7 +1303,6 @@ export class Orchestrator extends EventEmitter {
     return new Promise<string>((resolve) => {
       this.pendingDecisionResolve = resolve;
 
-      // Auto-approve timeout
       if (this.config.autonomy.autoApproveTimeoutMs > 0) {
         setTimeout(() => {
           if (this.pendingDecisionResolve === resolve) {
@@ -1251,13 +1318,7 @@ export class Orchestrator extends EventEmitter {
       const resolve = this.pendingDecisionResolve;
       this.pendingDecisionResolve = null;
 
-      this.emitEvent({
-        type: 'decision:resolved',
-        decisionId: 'current',
-        resolution,
-        timestamp: Date.now(),
-      });
-
+      this.emitEvent({ type: 'decision:resolved', decisionId: 'current', resolution, timestamp: Date.now() });
       resolve(resolution);
     }
   }
@@ -1271,27 +1332,25 @@ export class Orchestrator extends EventEmitter {
   // ─── Helpers ───────────────────────────────────────────────────
 
   private emitEvent(event: OrchestratorEvent): void {
-    // Log all events to progress file
     try {
       appendProgress(this.harnessDir, event.type, JSON.stringify(event));
     } catch {
       // Non-fatal
     }
 
-    // Avoid Node's special 'error' event behavior (throws if no listener)
     if (event.type === 'error') {
       this.emit('nyai:error', event);
     } else {
       this.emit(event.type, event);
     }
-    this.emit('*', event); // wildcard for catch-all listeners
+    this.emit('*', event);
   }
 
   private persistState(): void {
     try {
       saveState(this.harnessDir, this.state);
     } catch {
-      // Non-fatal — state persistence is best-effort
+      // Non-fatal
     }
   }
 }

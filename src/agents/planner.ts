@@ -35,6 +35,45 @@ Write the following files:
 1. \`${harnessDir}/specs/${sprintId}.md\` — Feature Spec with acceptance criteria (each AC has an ID like AC-1, AC-2...)
 2. \`${harnessDir}/contracts/${sprintId}.md\` — Sprint Contract with instructions for Generator and Evaluator
 3. \`${harnessDir}/test-plans/${sprintId}.json\` — Test Plan (MANDATORY, see below)
+4. \`${harnessDir}/critical-path/${sprintId}.json\` — Critical Path (MANDATORY, see below)
+
+## Critical Path Output (MANDATORY — v0.6)
+The Critical Path defines the **main user journey** — the primary happy-path scenario that must always work.
+This is used for regression testing after each feature and for final goal acceptance.
+
+Write it as JSON:
+\`\`\`json
+{
+  "sprintId": "${sprintId}",
+  "goalSummary": "One-line summary of what the user wants to achieve",
+  "steps": [
+    {
+      "id": "CP-1",
+      "description": "Open the application / navigate to main page",
+      "verifyCommand": "curl -s http://localhost:3000 | grep -c '<title>'",
+      "expectedOutput": "1",
+      "dependsOn": []
+    },
+    {
+      "id": "CP-2",
+      "description": "Perform the core action",
+      "verifyCommand": "curl -s http://localhost:3000/api/action | jq '.status'",
+      "expectedOutput": "\"ok\"",
+      "dependsOn": ["CP-1"]
+    }
+  ],
+  "createdAt": ${Date.now()}
+}
+\`\`\`
+
+### Critical Path Rules
+- Focus on the **main happy path** only (3-8 steps max)
+- Each step MUST have a \`verifyCommand\` that can be run in a shell
+- Steps should verify the product works end-to-end, not individual units
+- This is NOT a test plan — it's a smoke test for the overall product
+- For CLI tools: use the tool's commands directly
+- For web apps: use curl, wget, or similar
+- For libraries: write a small script that imports and uses the library
 
 ## Test Plan Output (MANDATORY)
 For **every** acceptance criterion, write 1-3 concrete, executable TestCases.

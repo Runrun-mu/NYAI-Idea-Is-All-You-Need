@@ -132,6 +132,78 @@ export interface TestPlanResult {
   output?: string;
 }
 
+// ─── Issue Severity (v0.6) ────────────────────────────────────────
+
+export type IssueSeverity = 'P0' | 'P1' | 'P2' | 'P3' | 'P4';
+
+export interface Issue {
+  id: string;
+  severity: IssueSeverity;
+  title: string;
+  description: string;
+  featureId?: string;
+  source: 'evaluator' | 'generator' | 'planner' | 'orchestrator';
+  needsDecision: boolean;
+  options?: string[];
+  createdAt: number;
+  resolvedAt?: number;
+  resolution?: string;
+}
+
+// ─── Critical Path (v0.6) ─────────────────────────────────────────
+
+export interface CriticalPathStep {
+  id: string;             // "CP-1"
+  description: string;    // "Open browser to localhost:3000"
+  verifyCommand?: string; // "curl -s localhost:3000 | grep '<title>'"
+  expectedOutput?: string;
+  dependsOn?: string[];   // ["CP-1"] — ordering
+}
+
+export interface CriticalPath {
+  sprintId: string;
+  goalSummary: string;          // One-line summary of user's goal
+  steps: CriticalPathStep[];
+  createdAt: number;
+  reviewedByEvaluator?: boolean;
+  evaluatorAmendments?: string[];
+}
+
+// ─── Checkpoint Report (v0.6) ─────────────────────────────────────
+
+export type CheckpointType = 'feature' | 'integration' | 'goal';
+
+export interface Artifact {
+  type: 'screenshot' | 'text' | 'html_snapshot' | 'test_output';
+  title: string;
+  path: string;
+  description: string;
+}
+
+export interface CheckpointReport {
+  type: CheckpointType;
+  sprintId: string;
+  featureId?: string;
+  completedFeatures: string[];
+  remainingFeatures: string[];
+  criticalPathStatus: 'PASS' | 'FAIL' | 'PARTIAL' | 'NOT_RUN';
+  criticalPathResults?: {
+    stepId: string;
+    status: 'PASS' | 'FAIL' | 'SKIP';
+    actualOutput?: string;
+  }[];
+  testSummary: {
+    total: number;
+    passed: number;
+    failed: number;
+    skipped: number;
+  };
+  artifacts: Artifact[];
+  issues: Issue[];
+  narrative: string;
+  timestamp: number;
+}
+
 // ─── Timeout Context (v0.2.1) ────────────────────────────────────
 
 export interface TimeoutContext {
