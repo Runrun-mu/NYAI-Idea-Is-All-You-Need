@@ -254,6 +254,35 @@ nyai run "构建 AI Agent 后台管理系统，支持增删改查，深色主题
 
 → [`examples/agent-admin/`](examples/agent-admin/)
 
+### Example 3: OpenCodeCpp — C++ AI 编码助手
+
+```bash
+nyai run "用 C++17 重写 OpenCode 项目，实现 TUI、多 LLM 支持、工具系统、流式 Markdown 渲染" -d ./opencodewithc
+```
+
+**结果**：41 个源文件 / 8,000+ 行 C++ 代码，160+ 测试通过，多轮 Sprint 完成
+
+核心功能（全部由 NYAI 自主完成）：
+- FTXUI TUI + FTXUI 原生滚动
+- OpenAI + Anthropic 双 LLM 支持 + SSE 流式
+- 8 个工具（bash, read, write, edit, glob, grep, ls, skill）
+- Codex 风格三层上下文压缩（/compact）
+- Skill 系统（SKILL.md 知识包）
+- 并行工具调用（std::async）
+- 斜杠命令自动提示
+
+→ [github.com/Runrun-mu/OpenCode-Cpp](https://github.com/Runrun-mu/OpenCode-Cpp)
+
+### Example 4: opchot — AI 编码助手 + C++ 热更新 VM
+
+```bash
+nyai run "融合 OpenCodeCpp 和 cpphot 热更新虚拟机" -d ./opchot
+```
+
+**结果**：融合两个 C++ 项目，173 测试通过，一轮完成
+
+→ AI 编码 + HotVM 热加载执行，无需重启
+
 ## ⚙️ Configuration
 
 `.harness/config.yaml`：
