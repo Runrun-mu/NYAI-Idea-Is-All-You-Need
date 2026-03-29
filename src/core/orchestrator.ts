@@ -703,6 +703,27 @@ export class Orchestrator extends EventEmitter {
       );
       const result = await this.runAgentWithEvents(invocation, this.getEvaluatorTimeoutMs());
 
+      // Detect human-intervention-required patterns (e.g. browser auth, interactive login)
+      const humanInterventionPatterns = [
+        /auth.*browser/i, /browser.*auth/i, /login.*required/i,
+        /interactive.*required/i, /manual.*intervention/i,
+        /open.*browser/i, /oauth.*callback/i, /localhost.*auth/i,
+        /waiting.*authentication/i, /codex.*auth/i,
+      ];
+      const needsHuman = humanInterventionPatterns.some(p => p.test(result.output));
+      if (needsHuman) {
+        this.raiseIssue({
+          severity: 'P0',
+          title: 'Human intervention required: interactive authentication',
+          description: 'Goal acceptance test requires browser-based authentication that cannot be automated in headless mode. A human must complete this step manually.',
+          source: 'orchestrator',
+          options: ['Mark as passed (human verified)', 'Skip this check', 'Abort'],
+        });
+        // Transition to BLOCKED instead of retrying
+        await this.transitionTo('DONE', 'Blocked: requires human intervention for auth');
+        return false;
+      }
+
       // Parse goal acceptance result
       let goalPassed = false;
       let cpStatus: 'PASS' | 'FAIL' | 'PARTIAL' = 'FAIL';
@@ -913,6 +934,26 @@ export class Orchestrator extends EventEmitter {
       // Evaluate
       await this.transitionTo('EVALUATING', `Evaluating round ${this.state.round}`);
       const evalOutput = await this.runEvaluatorAgent(sprintId, this.state.round, this.state.previouslyPassedAcs);
+
+      // Detect human-intervention-required patterns in evaluator output
+      const evalHumanPatterns = [
+        /auth.*browser/i, /browser.*auth/i, /login.*required/i,
+        /interactive.*required/i, /manual.*intervention/i,
+        /open.*browser/i, /oauth.*callback/i, /localhost.*auth/i,
+        /waiting.*authentication/i, /codex.*auth/i,
+      ];
+      if (evalHumanPatterns.some(p => p.test(evalOutput))) {
+        this.raiseIssue({
+          severity: 'P0',
+          title: 'Evaluator blocked: requires human interaction',
+          description: 'Evaluation step requires interactive authentication (browser login). Cannot proceed in headless mode.',
+          source: 'evaluator',
+          options: ['Mark as passed (human verified)', 'Skip this check', 'Abort'],
+        });
+        await this.transitionTo('DONE', 'Blocked: evaluator requires human intervention');
+        done = true;
+        break;
+      }
 
       const evalResult = parseEvalVerdict(this.harnessDir, sprintId, this.state.round, evalOutput);
 
